@@ -7943,7 +7943,7 @@ an answer.
 
 So the app was opened and driven end to end, by hand, on a real wording: Star
 Health's Arogya Sanjeevani, uploaded through the interface the way a user would,
-then asked real questions. The pipeline worked — 80 clauses analysed, an answer
+then asked real questions. The pipeline worked: 80 clauses analysed, an answer
 in about forty seconds. Four things on the screen were wrong, and no eval in the
 repository could have seen any of them:
 
@@ -7955,8 +7955,8 @@ repository could have seen any of them:
 3. A correct answer about a hernia, citing the right clause and quoting it
    exactly, was shown under a red banner reading "Not verified. Treat this
    answer as unreliable."
-4. A settled answer — *not covered*, on a waiting period with ten months left to
-   run — was printed under the heading "To answer this properly, it would need
+4. A settled answer (*not covered*, on a waiting period with ten months left to
+   run) was printed under the heading "To answer this properly, it would need
    to know", followed by the claimant's age.
 
 These four share a shape worth naming before the detail. Each is a place where
@@ -7970,7 +7970,7 @@ say.
 
 ### What was on the screen
 
-The dashboard ranks clauses by impact — how likely a clause is to decide a claim
+The dashboard ranks clauses by impact: how likely a clause is to decide a claim
 against you. Rank 2 on Star Health's wording, above every real exclusion in the
 document, was a card whose plain-English rewrite read:
 
@@ -7988,12 +7988,12 @@ S T A N D A R D  E X C L U S I O N S
 
 Read the ending again: "in connection with or in respect of;". The sentence
 stops there. It has a subject, a verb, and no object. On the page, its object is
-the numbered list that follows — twenty-two exclusions, 1 through 22, each one a
+the numbered list that follows: twenty-two exclusions, 1 through 22, each one a
 thing the company will not pay for.
 
 The segmenter cut the fragment off from its list and handed it to the analysis
 stage as a clause in its own right. The model was asked, in effect, "what does
-this clause exclude?" — and the only faithful answer to a sentence whose object
+this clause exclude?", and the only faithful answer to a sentence whose object
 has been removed is "everything it names", which here is *any expenses what so
 ever incurred by the Insured Person*.
 
@@ -8011,7 +8011,7 @@ gives it authority.
 
 Before writing a rule, the obvious thing to establish is whether this is Star's
 typesetting or how IRDAI wordings are written. Every unnumbered clause in every
-available wording — three real, three synthetic — was printed with its ending
+available wording (three real, three synthetic) was printed with its ending
 character:
 
 ```
@@ -8064,8 +8064,8 @@ reached. Walking forwards would mean carrying a pending fragment through the
 loop, which is the same logic with an extra variable.
 
 Requiring the fragment to be unnumbered is what stops the rule eating real
-clauses. A numbered clause that happens to introduce a list of its own —
-"4. The following are excluded:" — keeps its number, its identity and its own
+clauses. A numbered clause that happens to introduce a list of its own
+("4. The following are excluded:") keeps its number, its identity and its own
 entry.
 
 ### Three alternatives, and why each was rejected
@@ -8077,7 +8077,7 @@ entry.
 - Attach it to all twenty-two exclusions. It does govern all of them. But
   every one of those clauses would then carry a duplicated preamble, inflating
   its length, its measured reading difficulty and its share of the context
-  window — for no gain, because exclusions 2 through 22 already read correctly
+  window, for no gain, because exclusions 2 through 22 already read correctly
   alone ("21. Any expenses incurred on Domiciliary Hospitalization and OPD
   treatment", filed under a section headed EXCLUSIONS).
 
@@ -8098,13 +8098,13 @@ document, and one invariant holds throughout the pipeline:
 raw_text[seg.char_start : seg.char_end] == seg.text
 ```
 
-That invariant is what makes a citation provable — it is how a quoted span is
+That invariant is what makes a citation provable: it is how a quoted span is
 traced back to a position in the PDF the user uploaded. A concatenation of two
 strings produces text that appears nowhere in the document at those offsets, and
 the invariant would break silently, taking the grounding guarantee with it.
 
 Taking the slice keeps it exact, and has a useful side effect: anything sitting
-*between* the two pieces — such as the section heading in the middle — comes back
+*between* the two pieces (such as the section heading in the middle) comes back
 along with it, which is what the page shows anyway.
 `api/tests/test_segment.py` asserts this invariant over every clause of every
 test document, and it still holds after the merge.
@@ -8127,7 +8127,7 @@ merged length would be: 3198
 
 HDFC's first exclusion had already been split by `_split_oversized` to sit
 just under the cap. Adding a 200-character lead-in to a 2,997-character clause
-overflows by 198, the guard fired, and the merge was skipped — on one of only two
+overflows by 198, the guard fired, and the merge was skipped, on one of only two
 documents the rule exists for.
 
 Notice what the comment claims and what the code tested. The comment reasons
@@ -8155,7 +8155,7 @@ splitting was two more lines and actually did the job.
 
 ### The setup
 
-While measuring Failure 73, one other Star segment stood out — 36 characters, no
+While measuring Failure 73, one other Star segment stood out: 36 characters, no
 clause number, and its entire content was:
 
 ```
@@ -8178,8 +8178,8 @@ known policy vocabulary inside it:
             return True
 ```
 
-`_RE_SECTION_WORD` looks for whole words — `\bconditions?\b`, `\bexclusions?\b`
-— and "s t a n d a r d  c o n d i t i o n s" contains no such word. The test
+`_RE_SECTION_WORD` looks for whole words (`\bconditions?\b`, `\bexclusions?\b`),
+and "s t a n d a r d  c o n d i t i o n s" contains no such word. The test
 failed, and every letter-spaced heading in the document was treated as ordinary
 text.
 
@@ -8203,14 +8203,14 @@ niva-reassure-2.pdf      (none)
 
 **All nine of Star's major headings**, and not one in the other two documents.
 One of the nine became a clause of its own; the rest were swallowed into
-whichever clause they sat beside — which is why the fragment in Failure 73 ended
+whichever clause they sat beside, which is why the fragment in Failure 73 ended
 in `S` rather than in `;`.
 
 ### Concept 46: reading what the page says, not what the file contains
 
 A PDF does not store words. It stores glyphs and the positions they are painted
 at. The gap between two letters and the gap between two words are the same kind
-of thing — a distance — and text extraction turns distances into spaces by
+of thing (a distance), and text extraction turns distances into spaces by
 comparing them against a threshold derived from the font.
 
 Letter-spaced display type defeats that threshold, because its letter gaps are
@@ -8242,7 +8242,7 @@ has an unplanned benefit. One of Star's headings extracts irregularly:
 'S P E C I F I C  C O N D ITION S'  ->  'SPECIFIC CONDITIONS'
 ```
 
-`C O N D ITION S` is a mess — three differently-spaced pieces. But the double
+`C O N D ITION S` is a mess: three differently-spaced pieces. But the double
 space before it is intact, so the word boundary is found, and everything inside
 that boundary is joined regardless of how it was spaced internally. A rule built
 on the letter gaps would have failed here. The boundary carried the
@@ -8288,14 +8288,14 @@ prose; grade 20 is dense legal drafting. The formula, in
     grade = 0.39 * (len(words) / sentences) + 11.8 * (syllables / len(words)) - 15.59
 ```
 
-It is used here because legal writing scores high on both terms at once — long
-subordinate sentences built from Latinate vocabulary — and that is precisely the
+It is used here because legal writing scores high on both terms at once (long
+subordinate sentences built from Latinate vocabulary), and that is precisely the
 obscuring this project exists to measure.
 
 ### The cause
 
-The annexure is 145 lines of item names — BABY FOOD, BELTS/BRACES, OXYGEN
-CYLINDER (FOR USAGE OUTSIDE THE HOSPITAL) — and not one of them ends in a full
+The annexure is 145 lines of item names (BABY FOOD, BELTS/BRACES, OXYGEN
+CYLINDER (FOR USAGE OUTSIDE THE HOSPITAL)), and not one of them ends in a full
 stop. Sentences were counted by splitting on `[.!?]`, which on a text
 containing no terminator returns exactly one piece. So:
 
@@ -8316,7 +8316,7 @@ unaffected, because the buriedness signal was already clamped:
 ```
 
 Grade 94 and grade 20 both yield `reading = 1.0`. The score was right and the
-displayed number was nonsense — which is exactly why no eval caught it. The
+displayed number was nonsense, which is exactly why no eval caught it. The
 harness scores verdicts and rankings; this number only ever reached a human eye.
 
 ### A wrong fix, measured before it was written
@@ -8333,8 +8333,8 @@ Ten sentences, thirty-one lines. Counting lines there would cut a real clause's
 measured difficulty by roughly a third for a typesetting reason. That fix trades
 a wrong number on 2 segments for a wrong number on 400.
 
-What separates the two cases is not the presence of line breaks — both have them
-— but the complete absence of any sentence:
+What separates the two cases is the complete absence of any sentence; both
+have line breaks:
 
 ```python
     units = [s for s in _RE_SENTENCE.split(text) if s.strip()]
@@ -8366,7 +8366,7 @@ Niva List II / III (one line each)        unchanged      one line either way
 
 **The regression is real and is being kept deliberately.** HDFC's definition of
 "acute condition" is genuine prose that happens to omit its final full stop. It
-is now measured as three short lines rather than one long sentence — grade 10,
+is now measured as three short lines rather than one long sentence: grade 10,
 where 22 is nearer the truth. It is one segment in 408; its effect is one input
 to a buriedness signal weighted 0.35 which is then clamped; and the alternative
 fix damaged 400 segments to rescue it.
@@ -8380,7 +8380,7 @@ Writing the regression down here, with its size, is the point. A fix recorded as
 
 Asked *"I need surgery for an inguinal hernia that was found last month. I bought
 this policy 14 months ago and it is my first health insurance."*, the system
-answered not_covered, citing Star's specified-disease waiting period — the
+answered not_covered, citing Star's specified-disease waiting period: the
 right verdict, from the right clause. Above it sat a red banner:
 
 > **Not verified.** Some wording quoted below could not be found in your policy.
@@ -8430,7 +8430,7 @@ A contiguous-substring check was never verifying meaning, and it is worth being
 blunt about why. A model could already quote one true sentence and omit the
 qualifying sentence immediately after it. Truncation is elision with only one
 gap, and truncation always passed. What contiguity actually bought was a limit
-on how far apart the kept pieces could sit — a weaker guarantee than it appears
+on how far apart the kept pieces could sit, a weaker guarantee than it appears
 to be, and not the guarantee anyone thought they were relying on.
 
 So the replacement keeps provenance exact and adds three constraints that
@@ -8496,11 +8496,11 @@ beyond this project.
 A warning is only useful for as long as people believe it. This banner tells a
 reader to distrust the answer and go and read the clauses themselves. If it
 fires on answers that are exactly right, readers learn within a handful of uses
-that it means nothing — and then it is still there, still firing, on the day the
+that it means nothing, and then it is still there, still firing, on the day the
 model does fabricate a quotation.
 
-**A check that cries wolf does not degrade into a stricter check. It degrades
-into no check at all**, while continuing to look like a check in the code and in
+A check that cries wolf does not degrade into a stricter check. It degrades
+into no check at all, while continuing to look like a check in the code and in
 the interface. That same argument already appears in this file as the reason a
 trailing reference tag is stripped before comparison, and it is why this one was
 worth doing carefully rather than leaving alone.
@@ -8509,8 +8509,8 @@ worth doing carefully rather than leaving alone.
 
 ### What was on the screen
 
-Under the same hernia answer — a settled *not covered*, decided by a waiting
-period with ten months still to run — the interface printed:
+Under the same hernia answer (a settled *not covered*, decided by a waiting
+period with ten months still to run) the interface printed:
 
 > **To answer this properly, it would need to know**
 > — your age
@@ -8522,8 +8522,8 @@ Two separate things are wrong there, with two different causes.
 
 ### Part one: one list, two audiences, opposite meanings
 
-The list comes from `DECISIVE_FACTS` — the facts that *can* decide an outcome
-under an Indian health policy — filtered to those the person did not state:
+The list comes from `DECISIVE_FACTS` (the facts that *can* decide an outcome
+under an Indian health policy), filtered to those the person did not state:
 
 ```python
     missing = [k for k in DECISIVE_FACTS if facts.get(k) in (None, "", "unknown")]
@@ -8534,7 +8534,7 @@ That single list has two consumers, and they want opposite things from it.
 **In the reasoning prompt** it appears under the heading *"NOT STATED by the
 person (do not assume values for these)"*, and listing every unstated decisive
 fact there is exactly right. It is what lets the model tell "the policy is
-silent on this" apart from "the person didn't mention it" — two situations that
+silent on this" apart from "the person didn't mention it": two situations that
 lead to different verdicts, and the reason `insufficient_information` can be a
 first-class answer at all.
 
@@ -8544,7 +8544,7 @@ above it was not proper.
 When the verdict genuinely is `insufficient_information`, that heading is the
 entire point: those facts are the reason there is no answer, and asking for them
 is the useful thing to do. When a verdict *was* reached, the same words tell the
-reader that a correct, decided answer is incomplete — and nothing on the screen
+reader that a correct, decided answer is incomplete, and nothing on the screen
 distinguishes the two situations.
 
 There is a documented reason the two lists are built from one source: they were
@@ -8561,7 +8561,7 @@ the verdict is the thing that actually differs:
           </p>
 ```
 
-Nothing is hidden from the reader — the same facts are still listed. The claim
+Nothing is hidden from the reader: the same facts are still listed. The claim
 attached to them is now one the system can support.
 
 ### Part two: a fact stated twice and read as unknown
@@ -8570,7 +8570,7 @@ attached to them is now one the system can support.
 says the hernia was found last month, and that the policy was bought 14
 months ago. A condition found one month ago, under cover held for fourteen,
 began thirteen months *into* the policy. It is not pre-existing, and the
-description says so — just not in those words.
+description says so in other words.
 
 The extractor returned `"unknown"`, and this sentence in the fact prompt is why:
 
@@ -8581,8 +8581,8 @@ clear either way. "Unknown" is the honest answer far more often than not.
 
 **This project has been here before.** An earlier milestone rewrote that exact
 sentence to make the extractor read harder. It worked on the pre-existing
-sentences and cost six unrelated main-set cases — an ICU rate, a breach of
-law, pre-hospitalisation expenses — because the fact prompt feeds every reasoning
+sentences and cost six unrelated main-set cases (an ICU rate, a breach of
+law, pre-hospitalisation expenses), because the fact prompt feeds every reasoning
 prompt, so changing what it says about one field changes answers everywhere. It
 was reverted and recorded as open.
 
@@ -8594,7 +8594,7 @@ Python, waiting periods are compared in Python, and `age_at_policy_start` is
 already derived rather than inferred for exactly this reason.
 
 So the condition's age becomes a duration like every other duration in the
-schema — a value and a unit, reported, not judged:
+schema: a value and a unit, reported, not judged:
 
 ```python
         # HOW LONG THE CONDITION HAS BEEN KNOWN, as a value and a unit, like
@@ -8631,7 +8631,7 @@ def derive_pre_existing(facts: dict[str, Any]) -> dict[str, Any]:
 `duration_days(facts, "time_since_policy_start")`; the logic is unchanged.)
 
 Two deliberate narrowings, both following a principle this project arrived at
-earlier — that a check which overrides a model must act only on positive evidence
+earlier: a check which overrides a model must act only on positive evidence
 for the other reading, because its two kinds of mistake do not cost the same:
 
 - It only fills an `"unknown"`. Someone who states outright that a condition
@@ -8673,7 +8673,7 @@ tuned     sentences that WERE held out until a prompt change was made
 
 The rule for deciding whether something is real: three fresh
 samples on the new prompt and three on committed `main`. A single sample of
-this model proves nothing — one case in this very set, `seven-years-at-59`,
+this model proves nothing: one case in this very set, `seven-years-at-59`,
 flipped between runs with no code change at all.
 
 ### v45: the example that stole an age
@@ -8701,8 +8701,8 @@ v44 (baseline):   age=72    age=72    age=72
 Unanimous both ways, so not noise. The phrase "last month" appears in both
 sentences doing different work: in the example it dates the *condition*, in the
 eval sentence it dates the *admission*. Teaching the model to reach for a new
-field on "last month" pulled its attention onto that phrase, and `age: 72` —
-which nothing in the new block mentions — was dropped on the floor.
+field on "last month" pulled its attention onto that phrase, and `age: 72`
+(which nothing in the new block mentions) was dropped on the floor.
 
 ### v46: a fix that named too many fields
 
@@ -8723,12 +8723,12 @@ ped-waiting-served  time_since_policy_start=None    (the stated 5 years, lost)
 
 Checked against baseline: `ped-waiting-served` and `63-held-eleven` both pass
 3/3 on `main`, so both were genuine regressions. A third case in the same run,
-`70-bought-at-55`, failed on both prompts 3/3 — a pre-existing failure, not
+`70-bought-at-55`, failed on both prompts 3/3: a pre-existing failure, not
 a regression, and worth separating out before drawing any conclusion.
 
 The cause is visible in the wording. Naming `age` and `how long the policy has
 been held` in one breath, as things the new field is *not*, put those two fields
-side by side in the model's attention — and it responded by relating them. That
+side by side in the model's attention, and it responded by relating them. That
 is how `63 - 11 = 52` appears in a field the prompt has always said to leave null
 when unstated.
 
@@ -8753,7 +8753,7 @@ measured from a HOSPITAL STAY is not this field either:
 
 The age subtraction is not a new problem; the prompt has always said so, in the
 ages section: *"Fill in only what was actually said; the arithmetic linking them
-is done afterwards, in code."* The new block had quietly weakened it by
+is done afterwards, in code."* The new block had weakened it, unnoticed, by
 introducing one more duration to relate. So the closing line restates the
 existing rule rather than inventing one for this field:
 
@@ -8847,7 +8847,7 @@ rewrote a free-text field that no instruction covers (v48).
 
 It is the same mechanism as the earlier reversion recorded in this log (Failure
 42), where a
-change aimed at pre-existing conditions broke an ICU rate — and it is why that
+change aimed at pre-existing conditions broke an ICU rate, and it is why that
 attempt was abandoned rather than debugged. What made this one survivable was
 not better prompt wording. It was:
 
@@ -8873,7 +8873,7 @@ not better prompt wording. It was:
 
 Two honest notes about what this evidence supports. `copay-applies-emergency`
 and `ped-waiting-served` are eval sentences, not held-out ones, and the v46
-and v47 wordings were written while looking at their failures — they are evidence
+and v47 wordings were written while looking at their failures: they are evidence
 the collisions were closed, not that the fix generalises. The v48 line was
 written from the prompt's own existing rule rather than from
 `63-held-eleven`'s output, and `63-held-eleven` is held out; but having watched
@@ -8955,7 +8955,7 @@ Two things follow, and both matter more than the six cases.
 **The answer key had gone stale, and nothing was watching.** Those expectations
 were recorded when they passed; they have since stopped passing; and because
 this check is run by hand rather than from the test suite, nobody was told. A
-stale expectation is worse than a missing one — it reads as a guarantee, and it
+stale expectation is worse than a missing one: it reads as a guarantee, and it
 mislabels a pre-existing failure as a regression, which is exactly what it did
 here until the baseline was run.
 
@@ -8970,7 +8970,7 @@ down.
 Those five cases are not fixed by this milestone and remain open: the
 extractor still will not answer "no" or "yes" to a sentence that states the
 relationship in words rather than in two durations. What this milestone fixed is
-the case that can be settled by arithmetic — which is the case that should never
+the case that can be settled by arithmetic, which is the case that should never
 have been put to the model in the first place.
 
 ## Closing out M18
@@ -8984,8 +8984,8 @@ render a dashboard, does not read a clause card, and does not see the sentence
 printed beneath an answer.
 
 All five failures here were found in about twenty minutes of using the app by
-hand, and every one of them had been shipping for milestones. That is not a
-criticism of the harness — it is a statement about coverage. An eval measures
+hand, and every one of them had been shipping for milestones. That is a statement
+about coverage. An eval measures
 the thing you pointed it at. Everything else is unmeasured, and unmeasured is
 not the same as working.
 
@@ -9015,7 +9015,7 @@ The lead-in merge and the heading recovery are the first segmentation rules in
 this project derived from a pattern measured across documents rather than
 from one document's failure. Both were checked against all six available
 wordings before being written, and both were required to leave the other
-documents untouched — which they did, to the segment.
+documents untouched, which they did, to the segment.
 
 That is the shape a rule needs to have here. Star's wording is one insurer's
 house style; a rule tuned to it that moves Niva's or HDFC's boundaries is not a
@@ -9121,7 +9121,7 @@ cd api && python -m pytest -m "not llm" -q     # 264 tests
 ```
 
 To see Failure 73 directly, segment a real wording and look for an unnumbered
-clause whose text ends in a semicolon. There should not be one — it should have
+clause whose text ends in a semicolon. There should not be one: it should have
 become the opening of the clause below it.
 
 The fact extractor, about twenty-five minutes and one fresh model call per
@@ -9141,14 +9141,14 @@ this check now passes quotations that mislead?*
 <summary>Answer</summary>
 
 It can, and it did before the change too. A contiguous quotation can stop
-immediately before the sentence that qualifies it — truncation is elision with
-the gap at the end — and truncation always passed. So the objection is really an
+immediately before the sentence that qualifies it (truncation is elision with
+the gap at the end), and truncation always passed. So the objection is really an
 objection to what a substring check is, not to this change.
 
 The useful move is to be precise about the question the check answers.
-Provenance — did these words come from this clause? — is decidable by
-looking, and is what the check has always done. Meaning — is the quotation
-fair? — requires judging whether the skipped material mattered, which is a
+Provenance (did these words come from this clause?) is decidable by
+looking, and is what the check has always done. Meaning (is the quotation
+fair?) requires judging whether the skipped material mattered, which is a
 reading. No substring test has ever been able to answer it, and one that appears
 to is more dangerous than one that admits it cannot.
 
@@ -9196,7 +9196,7 @@ different pieces of code built that list:
 Both built the same object from different sources, and nothing checked that
 they agreed. Every time a field was added to the analysis (the co-pay age, the
 ICU caps, the cover window all arrived this way) someone had to remember to add
-it in both places. Forget the eval's copy, and the eval quietly measures a
+it in both places. Forget the eval's copy, and the eval silently measures a
 system that differs from the one users get: the endpoint would reason with
 the new field and the eval without it, and the eval's numbers would describe
 neither.
