@@ -16654,7 +16654,7 @@ M43 this question was right only because the model's wrong first answer
 (`covered`, citing clause 18) had a shape the safety rule catches. With
 both changes, both printed samples refuse it on the first answer:
 
-> not_covered, citing 18 —
+> not_covered, citing 18:
 > "... 'Medical treatment expenses traceable to childbirth (including
 > complicated deliveries and caesarean sections incurred during
 > hospitalization) except ectopic pregnancy' are excluded. This exclusion
@@ -17066,7 +17066,7 @@ server session, on the first four:
 Dengue four months into a policy, with no earlier insurance, went from paid
 to refused. One answer printed in full:
 
-> not_covered, citing Excl01 —
+> not_covered, citing Excl01:
 > "The claim is not covered due to the 36-month Pre-Existing Disease
 > Waiting Period (Excl01). ... which is not enough time to satisfy the
 > waiting period for a new illness like dengue."
@@ -17955,8 +17955,8 @@ skipped after the heading is taken, or it would become a one-word clause.
 **Result:** ICICI's six top-level sections are found, and Niva's "6.
 General Terms and Clauses". Synthetic, Star and HDFC are byte-identical.
 
-**But Niva's "5. Exclusions" still is not found, and the waits are still
-misfiled.** The count guard failed on it, and the reason is a second fault:
+But Niva's "5. Exclusions" still is not found, and the waits are still
+misfiled. The count guard failed on it, and the reason is a second fault:
 Niva's PDF stores page 9 bottom-first. The 30-day wait, at 663 points down
 the page, comes out of PyMuPDF *before* "5. Exclusions" at 250. So when "5."
 arrives, the clause being built is already "5.1.3", not "4.x". Even with the
@@ -18098,8 +18098,8 @@ program and Elevate HER add-on tables, the claims procedure.
   with a non-breaking hyphen, which the waiting-period duration pattern does
   not read.
 
-**ICICI is too large for the model's context, and that is a design
-decision.** The reasoning prompt has room for about 23,800 tokens of clause
+ICICI is too large for the model's context, and that is a design
+decision. The reasoning prompt has room for about 23,800 tokens of clause
 text (`clause_token_budget()`). ICICI's clauses are 57,400 tokens; its
 benefits section alone is 37,500. HDFC is over too, at 36,800, which is why
 33 of its clauses (definitions and procedural ones) are already left out of
@@ -18296,7 +18296,7 @@ All runs: Ollama 0.35.1, `qwen2.5:7b-instruct-q4_K_M`, the pinned server.
 
 | Code | Right | Wrong answers |
 |---|---|---|
-| `main` (recorded before M47) | 14/14 | – |
+| `main` (recorded before M47) | 14/14 | n/a |
 | M47 | 13/14 | `hdfc-hernia-14-months` (covered, 2 of 3) |
 | M48 | 12/14 | `hdfc-hernia-14-months` (3 of 3); `hdfc-tests-75-days-before` (conditional, 2 of 3) |
 | M49 | 13/14, every case unanimous | `hdfc-typhoid-45-days` (not_covered, 3 of 3) |
@@ -19197,7 +19197,7 @@ person named" (`named_in_question` in `scenario.py`, `_named_in` in
 names clauses either.
 
 **It is not kept out of everything.** A code review found three other places
-it reaches: the clause-PICK prompt (`render_pick_request` in `prompts.py`
+it reaches: the clause-pick prompt (`render_pick_request` in `prompts.py`
 lists the facts, `other_conditions` included), the API response, and the
 stored scenario run. And the facts step's free-text `notes`, which the
 reasoning prompt does show, can repeat the history in the model's own words.
@@ -19479,7 +19479,7 @@ Two things follow.
 **Nothing in a note is information the reasoning step lacks.** The facts step
 is shown only the question, so every true thing a note says is in the
 question, and the question is printed verbatim at the top of both prompts.
-"It is my first health insurance" is valuable, but it is valuable in the
+"It is my first health insurance" is useful, but it belongs in the
 person's sentence, which stays.
 
 **But dropping notes is not free.** The project measured it twice. M10 removed
@@ -19650,7 +19650,7 @@ so every difference below was then re-asked three times on both codes.
 | held-out 2 (13) | 13/13 | 12/13 |
 | held-out 3 (3) | 1/3 | 1/3 |
 | held-out 4 (6) | 3/6 | 4/6 |
-| held-out 5 (4, new) | 2/4 | - |
+| held-out 5 (4, new) | 2/4 | n/a |
 | HDFC (14) | 13/14 | 14/14 |
 | Star (10) | 10/10 | 10/10 |
 | Star, treatment abroad (7) | 7/7 | 6/7 |
