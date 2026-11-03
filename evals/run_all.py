@@ -79,7 +79,7 @@ def _cache_note(seconds: float) -> str:
 # What each held-out batch has been exposed to, stated beside its number. A
 # held-out score is only as clean as its history, and the history is the point.
 HELDOUT_NOTES = {
-    "1": "read while diagnosing M14 failures - no longer clean",
+    "1": "read while diagnosing M14 failures, so no longer clean",
     "2": "written before running; one case read while diagnosing",
     "3": "written for M21 before its code and before any run",
     "4": "written for M22 before its code and before any run",
@@ -114,35 +114,33 @@ def build(classification: dict, scenario: dict, seconds: float,
         "this repository, so the labels and the document come from one source and",
         "cannot drift apart. No real insurer wording is used.",
         "",
-        "---",
-        "",
         "## Headline",
         "",
         "| What is measured | Score | Kind |",
         "|---|---:|---|",
-        f"| Clause classification (macro-F1) | **{classification['macro_f1']:.3f}** "
+        f"| Clause classification (macro-F1) | {classification['macro_f1']:.3f} "
         "| quality |",
     ]
     if rank:
         lines.append(
-            f"| Risk ranking expectations | **{rank['passed']}/{rank['total']}** | quality |"
+            f"| Risk ranking expectations | {rank['passed']}/{rank['total']} | quality |"
         )
     lines += [
-        f"| Scenario verdict accuracy | **{scenario['verdict_accuracy']:.3f}** | quality |",
+        f"| Scenario verdict accuracy | {scenario['verdict_accuracy']:.3f} | quality |",
     ]
     for batch, res in heldout.items():
         lines.append(
             f"| Scenario verdict accuracy, held-out batch {batch} ({res['total']} cases, "
-            f"{HELDOUT_NOTES.get(batch, 'never tuned on')}) | **{res['verdict_accuracy']:.3f}** "
+            f"{HELDOUT_NOTES.get(batch, 'never tuned on')}) | {res['verdict_accuracy']:.3f} "
             f"| quality |"
         )
     lines += [
-        f"| Scenario citation recall | **{scenario['citation_recall']:.3f}** | quality |",
+        f"| Scenario citation recall | {scenario['citation_recall']:.3f} | quality |",
         f"| Scenario false citation rate | "
-        f"**{scenario['false_citation_rate']:.3f}** | quality |",
-        f"| Quote fabrication rate | **{scenario['fabrication_rate']:.3f}** | quality |",
-        f"| **Citation detection integrity** | "
-        f"**{scenario['detection_integrity']:.3f}** | **guarantee** |",
+        f"{scenario['false_citation_rate']:.3f} | quality |",
+        f"| Quote fabrication rate | {scenario['fabrication_rate']:.3f} | quality |",
+        f"| Citation detection integrity | "
+        f"{scenario['detection_integrity']:.3f} | guarantee |",
         "",
         "### Only one of these is a promise",
         "",
@@ -150,28 +148,27 @@ def build(classification: dict, scenario: dict, seconds: float,
         "a laptop performs a hard task. Those numbers are published as they came",
         "out, including the ones that are not good.",
         "",
-        "**Detection integrity is different in kind.** It asks: of the quotations",
+        "Detection integrity is different in kind. It asks: of the quotations",
         "the model invented, how many were caught and shown to the reader as",
         "unverified rather than presented as evidence? That is the property the",
         "grounding design actually promises, and it is the only number here that",
         "would count as a bug if it moved.",
         "",
         "It is computed by re-verifying every quotation independently and comparing",
-        "against the flag the pipeline set - never by reading that flag. A",
+        "against the flag the pipeline set; the flag itself is never taken as the",
+        "answer. A",
         "self-reported guarantee is not a measurement: a broken verifier would",
         "cheerfully report a clean run.",
         "",
-        "---",
-        "",
         "## 1. Clause classification",
         "",
-        f"**Macro-F1 {classification['macro_f1']:.3f}** · "
+        f"Macro-F1 {classification['macro_f1']:.3f} · "
         f"accuracy {classification['accuracy']:.3f} · "
         f"{classification['clauses_analysed']}/{classification['clauses_expected']} clauses",
         "",
         "Macro-F1 rather than accuracy, because the golden policy has 8 exclusions",
         "and only 4 waiting periods. Accuracy lets a model coast on the common",
-        "types; macro-F1 weights each equally, which matches reality - a missed",
+        "types; macro-F1 weights each equally, which matches reality: a missed",
         "waiting period misleads a policyholder just as badly as a missed exclusion.",
         "",
         "| Clause type | Support | Precision | Recall | F1 |",
@@ -185,24 +182,22 @@ def build(classification: dict, scenario: dict, seconds: float,
             )
 
     if classification["confusions"]:
-        lines += ["", "**Confusions** (expected → predicted):", ""]
+        lines += ["", "Confusions (the expected type, then the type it was read as):", ""]
         for (expected, predicted), n in classification["confusions"].most_common():
-            lines.append(f"- `{expected}` → `{predicted}` ×{n}")
+            lines.append(f"- `{expected}` read as `{predicted}` ×{n}")
 
     # --- ranking ---
     if rank:
         lines += [
             "",
-            "---",
-            "",
             "## 2. Risk ranking",
             "",
-            f"**{rank['passed']}/{rank['total']} expectations met** (top {rank['top_n']})",
+            f"{rank['passed']}/{rank['total']} expectations met (top {rank['top_n']})",
             "",
             "Classification F1 measures labelling. This measures the ranking, which",
             "is the actual product. The two are not the same: an early version",
             "scored a perfect 1.000 on labels while burying the room-rent cap at",
-            "position 14 and the senior co-payment at 22 - the two most common",
+            "position 14 and the senior co-payment at 22, the two most common",
             "causes of an unexpected shortfall in an Indian health claim.",
             "",
             "Expectations are hand-authored in `golden/ranking-expectations.json`",
@@ -211,23 +206,22 @@ def build(classification: dict, scenario: dict, seconds: float,
             "",
         ]
         if rank["misses"]:
-            lines += ["**Should be in the top 10 but is not:**", ""]
+            lines += ["Should be in the top 10 but is not:", ""]
             for m in rank["misses"]:
-                lines.append(f"- `{m['number']}` (rank {m['rank'] or '—'}) — {m['reason']}")
+                place = f"rank {m['rank']}" if m["rank"] else "unranked"
+                lines.append(f"- `{m['number']}` ({place}): {m['reason']}")
             lines.append("")
         if rank["violations"]:
-            lines += ["**In the top 10 but should not be:**", ""]
+            lines += ["In the top 10 but should not be:", ""]
             for v in rank["violations"]:
-                lines.append(f"- `{v['number']}` (rank {v['rank']}) — {v['reason']}")
+                lines.append(f"- `{v['number']}` (rank {v['rank']}): {v['reason']}")
             lines.append("")
 
     # --- scenarios ---
     lines += [
-        "---",
-        "",
         "## 3. Scenario simulator",
         "",
-        f"**Verdict accuracy {scenario['verdict_accuracy']:.3f}** "
+        f"Verdict accuracy {scenario['verdict_accuracy']:.3f} "
         f"({sum(r['verdict_ok'] for r in scenario['rows'])}/{scenario['total']}) · "
         f"citation recall {scenario['citation_recall']:.3f} · "
         f"detection integrity {scenario['detection_integrity']:.3f}",
@@ -237,7 +231,7 @@ def build(classification: dict, scenario: dict, seconds: float,
     ]
     for row in scenario["rows"]:
         mark = "" if row["verdict_ok"] else " ⚠"
-        cite = ", ".join(row["cited"]) or "—"
+        cite = ", ".join(row["cited"]) or "none"
         if row["required"] and not row["citation_ok"]:
             cite += f" (missing {', '.join(row['required'])})"
         lines.append(
@@ -251,12 +245,10 @@ def build(classification: dict, scenario: dict, seconds: float,
             "",
             "### What the misses actually need",
             "",
-            "These are not random. Read them together:",
-            "",
         ]
         for row in misses:
             lines.append(
-                f"- **`{row['id']}`** — expected `{row['expected']}`, got "
+                f"- `{row['id']}`: expected `{row['expected']}`, got "
                 f"`{row['got']}`. {row['why']}"
             )
         lines += [
@@ -268,16 +260,14 @@ def build(classification: dict, scenario: dict, seconds: float,
             "",
             "Single-clause classification scores macro-F1 "
             f"{classification['macro_f1']:.3f}. Combining three interacting rules",
-            f"scores {scenario['verdict_accuracy']:.3f}. **The gap between those two",
-            "numbers is the finding**, and it is the case for measuring a hosted",
-            "frontier model on this same set before assuming a bigger model is or",
-            "is not worth it.",
+            f"scores {scenario['verdict_accuracy']:.3f}. The gap between those two",
+            "numbers is this report's main finding, and the reason to measure a hosted",
+            "frontier model on this same set before deciding whether a bigger model",
+            "is worth it.",
         ]
 
     if heldout:
         lines += [
-            "",
-            "---",
             "",
             "## 3b. Held-out scenarios",
             "",
@@ -292,7 +282,7 @@ def build(classification: dict, scenario: dict, seconds: float,
         ]
         for batch, res in heldout.items():
             lines.append(
-                f"**Batch {batch}** ({HELDOUT_NOTES.get(batch, 'never tuned on')}): "
+                f"Batch {batch} ({HELDOUT_NOTES.get(batch, 'never tuned on')}): "
                 f"verdict accuracy {res['verdict_accuracy']:.3f} "
                 f"({sum(r['verdict_ok'] for r in res['rows'])}/{res['total']}), "
                 f"citation recall {res['citation_recall']:.3f}, "
@@ -304,8 +294,6 @@ def build(classification: dict, scenario: dict, seconds: float,
             lines.append("")
 
     lines += [
-        "",
-        "---",
         "",
         "## Reproducing this",
         "",
@@ -319,7 +307,7 @@ def build(classification: dict, scenario: dict, seconds: float,
         "The golden PDF is generated, not committed, so it is rebuilt from",
         "`evals/golden/build_synthetic_policy.py` if missing. Model responses are",
         "cached by a hash of model, messages, schema, decoding settings and the",
-        "server's KV cache precision, so a second run costs seconds - and",
+        "server's KV cache precision, so a second run costs seconds, and",
         "changing any of those recomputes rather",
         "than serving a stale answer. The prompt version is a label, not part of",
         "the key: an unchanged prompt replays its stored answer even after the",

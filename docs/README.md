@@ -2,484 +2,476 @@
 
 ## Start here
 
-**[LEARNING-LOG.md](LEARNING-LOG.md)** — the main document. It explains what this system does, why each piece is built the way it is, and every non-obvious failure encountered along the way, in the order things were built.
+[LEARNING-LOG.md](LEARNING-LOG.md) is the main document. It explains what this system does, why each piece is built the way it is, and every non-obvious failure encountered along the way, in the order things were built.
 
 It is written to be read cold, by someone who was not present while the code was written. You do not need any other context.
-
----
 
 ## If you only have twenty minutes
 
 Read these three sections of the log, in order:
 
-1. **Concept 1 — Constrained decoding** *(M0)*. The idea the whole system rests on: how a JSON Schema constrains token sampling itself, so invalid output is never generated rather than rejected afterwards.
-2. **Concept 2 — What constrained decoding does NOT give you** *(M0)*. The failure that shaped the project: every answer was structurally valid and two were badly wrong, both in the dangerous direction.
-3. **Failure 1 — The circular test** *(M1)*. A test suite passing 14/14 while proving nearly nothing, and what fixed it.
+1. Concept 1, constrained decoding (M0). The idea the whole system rests on: how a JSON Schema constrains token sampling itself, so invalid output is never generated rather than rejected afterwards.
+2. Concept 2, what constrained decoding does not give you (M0). The failure that shaped the project: every answer was structurally valid and two were badly wrong, both in the dangerous direction.
+3. Failure 1, the circular test (M1). A test suite passing 14/14 while proving nearly nothing, and what fixed it.
 
 Together they cover the reasoning that most of the rest of the codebase follows from.
 
----
-
 ## What each entry covers
 
-### M0 — Foundations: talking to a local model reliably
+### M0: Foundations for talking to a local model reliably
 Whether a 7B model on a laptop GPU can be trusted to produce structured output.
 
-- **Constrained decoding** — JSON Schema as a grammar constraint on sampling, not a prompt instruction. Why a hallucinated citation can be made *unrepresentable* rather than merely unlikely.
-- **What it does not give you** — the enum guarantees the *shape* of an answer, never the *judgment* behind it. A measured 3-of-4 wrong, fixed to 8-of-8 purely by defining the labels in the prompt.
-- **Content-addressed caching** — why the cache key must include the prompt version, and why `sort_keys=True` is correctness rather than tidiness.
+- Constrained decoding. JSON Schema as a grammar constraint on sampling, not a prompt instruction. Why a hallucinated citation can be made *unrepresentable* rather than merely unlikely.
+- What it does not give you. The enum guarantees the *shape* of an answer, never the *judgment* behind it. A measured 3-of-4 wrong, fixed to 8-of-8 purely by defining the labels in the prompt.
+- Content-addressed caching. Why the cache key must include the prompt version, and why `sort_keys=True` is correctness rather than tidiness.
 - Measured hardware facts that drive the architecture.
 
-### M1 — Reading the PDF: text, offsets, and clause boundaries
+### M1: Reading the PDF (text, offsets and clause boundaries)
 Turning a policy PDF into ~40 individually addressable clauses.
 
-- **The offset invariant** — `raw_text[start:end] == text`, and why a slice is a fundamentally stronger claim than a copy.
-- **Why segmentation must not use an LLM** — reproducibility, verifiability, speed, debuggability.
-- **Failure 1: the circular test** — tuning thresholds on a document you generated, then testing on that same document.
-- **Failure 2: a data model that hid the fix** — a clause's number is its identity; the heading is optional.
-- **Failure 3: a bug you cannot see** — a literal backspace byte inside a regex, and a passing test suite concealing entirely dead code.
+- The offset invariant. `raw_text[start:end] == text`, and why a slice is a fundamentally stronger claim than a copy.
+- Why segmentation must not use an LLM. Reproducibility, verifiability, speed, debuggability.
+- Failure 1: the circular test. Tuning thresholds on a document you generated, then testing on that same document.
+- Failure 2: a data model that hid the fix. A clause's number is its identity; the heading is optional.
+- Failure 3: a bug you cannot see. A literal backspace byte inside a regex, and a passing test suite concealing entirely dead code.
 
-### M2 - Analysis and scoring: measuring instead of guessing
+### M2: Analysis and scoring, measuring instead of guessing
 Classifying every clause, then ranking them by how much they could cost.
 
-- **Splitting judgment from arithmetic** - the model rates likelihood and severity; buriedness is computed. Why arithmetic done by a language model cannot be trusted or reproduced.
-- **Measuring "obscuring"** - position, Flesch-Kincaid grade, cross-references and defined-term dependence, and why buriedness multiplies rather than adds.
-- **Failure 4: a silent empty array** - `{"clauses": []}` is valid under a schema that only constrains element shape. Constrained decoding guarantees what you encode, and nothing you forgot to encode.
-- **Failure 5: an unmeasured optimisation** - batching was assumed faster, measured slower AND less accurate.
-- **Failure 6: unbounded arithmetic** - a bug only reachable through a test that used the code differently than production does.
-- **Measuring the right thing** - macro-F1 1.000 on classification, while the ranking buried the room-rent cap at 14. Two different metrics; only one is the product.
-- **Knowing when to stop tuning** - why 6/9 with a reason beats 9/9 by fitting.
+- Splitting judgment from arithmetic. The model rates likelihood and severity; buriedness is computed. Why arithmetic done by a language model cannot be trusted or reproduced.
+- Measuring "obscuring". Position, Flesch-Kincaid grade, cross-references and defined-term dependence, and why buriedness multiplies rather than adds.
+- Failure 4: a silent empty array. `{"clauses": []}` is valid under a schema that only constrains element shape. Constrained decoding guarantees what you encode, and nothing you forgot to encode.
+- Failure 5: an unmeasured optimisation. Batching was assumed faster, measured slower and less accurate.
+- Failure 6: unbounded arithmetic. A bug only reachable through a test that used the code differently than production does.
+- Measuring the right thing. Macro-F1 1.000 on classification, while the ranking buried the room-rent cap at 14. Two different metrics; only one is the product.
+- Knowing when to stop tuning. Why 6/9 with a reason beats 9/9 by fitting.
 
-### M3 - The API, and a bug tests could not see
+### M3: The API, and a bug tests could not see
 An HTTP surface over the pipeline: upload, poll, read ranked results.
 
-- **Why upload returns 202, not 200** - the work is queued, not completed; and why progress is weighted by time rather than by stage count.
-- **Committing status writes** - the poller reads from a different connection and can only see committed changes.
-- **Failure 7: the bug tests could not catch** - `create_all` never alters an existing table, so the dev database went stale. Every fixture starts with `drop_all`, so the suite was structurally blind to it. A suite that rebuilds the world before each test cannot see bugs that need a world which has been running for a while.
-- **Two kinds of test** - fast tests against a seeded database vs. end-to-end runs through the model. Tests check that it works; evals check how well.
+- Why upload returns 202, not 200. The work is queued, not completed; and why progress is weighted by time rather than by stage count.
+- Committing status writes. The poller reads from a different connection and can only see committed changes.
+- Failure 7: the bug tests could not catch. `create_all` never alters an existing table, so the dev database went stale. Every fixture starts with `drop_all`, so the suite was structurally blind to it. A suite that rebuilds the world before each test cannot see bugs that need a world which has been running for a while.
+- Two kinds of test. Fast tests against a seeded database vs. end-to-end runs through the model. Tests check that it works; evals check how well.
 
-### M4 - The interface, and designing against a default
+### M4: The interface, and designing against a default
 Four screens, built to a written design system rather than to defaults.
 
-- **Find the metaphor already in your data** - this product is a document arguing with another document, which is a critical edition. The API already pairs verbatim source with character offsets; the design makes that visible.
-- **Typography can carry meaning** - a document serif for the policy's words, a sans for the app's, so the side-by-side needs no labels.
-- **Colour must never be the only signal** - two semantic hues rather than a traffic light, always paired with a numeral and a text label.
-- **Failure 8: a rule enforced everywhere except where it mattered** - the severity numeral vanished below the `sm` breakpoint, breaking a rule from this project's own written design system.
-- **Failure 9: module resolution follows the file, not the shell** - the same bug as M0's `ModuleNotFoundError`, in a different language.
-- **You cannot review a design you have not looked at** - a committed Playwright script drives the real UI and captures every screen; it found bugs no typecheck or unit test could.
+- Find the metaphor already in your data. This product is a document arguing with another document, which is a critical edition. The API already pairs verbatim source with character offsets; the design makes that visible.
+- Typography can carry meaning. A document serif for the policy's words, a sans for the app's, so the side-by-side needs no labels.
+- Colour must never be the only signal. Two semantic hues rather than a traffic light, always paired with a numeral and a text label.
+- Failure 8: a rule enforced everywhere except where it mattered. The severity numeral vanished below the `sm` breakpoint, breaking a rule from this project's own written design system.
+- Failure 9: module resolution follows the file, not the shell. The same bug as M0's `ModuleNotFoundError`, in a different language.
+- You cannot review a design you have not looked at. A committed Playwright script drives the real UI and captures every screen; it found bugs no typecheck or unit test could.
 
-### Interlude - Why a local model, when hosted models are better
+### Interlude: Why a local model, when hosted models are better
 Answers the obvious question this project invites, without being defensive about it.
 
-- **What production systems actually use** - hosted frontier APIs, and by how much they beat a 7B model on hard reasoning.
-- **Cost is not the reason** - a whole policy is ~28k tokens, a few cents at API prices. Do the arithmetic rather than assuming.
-- **The reason that holds up** - a policy is a personal health and financial document. Local is a product property, not a budget choice.
-- **The counterintuitive part** - the strongest correctness guarantee exists partly BECAUSE of local grammar-level token masking. A bigger model is not automatically a free upgrade for it.
-- **Model choice is a parameter; the system around it is the work.**
+- What production systems actually use. Hosted frontier APIs, and by how much they beat a 7B model on hard reasoning.
+- Cost is not the reason. A whole policy is ~28k tokens, a few cents at API prices. Do the arithmetic rather than assuming.
+- The reason that holds up. A policy is a personal health and financial document. Local is a product property, not a budget choice.
+- The counterintuitive part. The strongest correctness guarantee exists partly *because* of local grammar-level token masking. A bigger model is not automatically a free upgrade for it.
+- Model choice is a parameter; the system around it is the work.
 
-### M5 - The scenario simulator, and making a citation impossible to fake
-"I had knee surgery 8 months after buying this" -> a verdict, with the clauses that decide it.
+### M5: The scenario simulator, and making a citation impossible to fake
+"I had knee surgery 8 months after buying this" becomes a verdict, with the clauses that decide it.
 
-- **Two mechanisms, not one** - an enum locks the citation's ADDRESS to a real clause; a verbatim quote check proves its CONTENT. The first alone permits a real clause id attached to invented wording, which was observed happening.
-- **Why there is no retrieval** - the whole policy is ~3,100 tokens and the context holds far more. Top-k could only drop the clause that decides the case.
-- **Abstention has to be built into the vocabulary** - constrained decoding cannot say "I don't know" unless that is an enum member.
-- **Failure 10: a silent context-window default** - the design assumed 32k; Ollama was applying 4,096, and a larger policy would have been truncated with no error.
-- **Failure 11: over-provisioning has a cost** - raising the window to 16k to "be safe" left 2GB free of 15.7GB and got the eval killed by the OS.
-- **Failure 12: two numbers that must agree should not be two numbers** - a clause budget set independently of the context window can exceed it.
-- **A check that cries wolf gets ignored** - a quotation 233 of 245 characters perfect was reported as if fabricated.
+- Two mechanisms, not one. An enum locks the citation's *address* to a real clause; a verbatim quote check proves its *content*. The first alone permits a real clause id attached to invented wording, which was observed happening.
+- Why there is no retrieval. The whole policy is ~3,100 tokens and the context holds far more. Top-k could only drop the clause that decides the case.
+- Abstention has to be built into the vocabulary. Constrained decoding cannot say "I don't know" unless that is an enum member.
+- Failure 10: a silent context-window default. The design assumed 32k; Ollama was applying 4,096, and a larger policy would have been truncated with no error.
+- Failure 11: over-provisioning has a cost. Raising the window to 16k to "be safe" left 2GB free of 15.7GB and got the eval killed by the OS.
+- Failure 12: two numbers that must agree should not be two numbers. A clause budget set independently of the context window can exceed it.
+- A check that cries wolf gets ignored. A quotation 233 of 245 characters perfect was reported as if fabricated.
 
-### M6 - One report, and proving the repo works for someone else
+### M6: One report, and proving the repo works for someone else
 Consolidating the evals, and the fresh-clone gate.
 
-- **Failure 15: a report that could not say when it was written** - two report files describing runs of different code, one saying "see PROMPT_VERSION in prompts.py" instead of recording it. A report is a record of a run; a pointer is not a record.
-- **Separating what is measured from what is promised** - the report's `Kind` column, and why the eval exits non-zero on detection integrity but never on verdict accuracy.
-- **Failure 16: misreading my own test failure** - "it failed" and "it failed for the reason I assumed" are different claims. A collection error that looked like a broken repo was a race with a background `pip install`.
-- **What a fresh clone actually gets** - 881KB, no PDF ever committed, all golden fixtures rebuilt from their generator.
+- Failure 15: a report that could not say when it was written. Two report files describing runs of different code, one saying "see PROMPT_VERSION in prompts.py" instead of recording it. A report is a record of a run; a pointer is not a record.
+- Separating what is measured from what is promised. The report's `Kind` column, and why the eval exits non-zero on detection integrity but never on verdict accuracy.
+- Failure 16: misreading my own test failure. "it failed" and "it failed for the reason I assumed" are different claims. A collection error that looked like a broken repo was a race with a background `pip install`.
+- What a fresh clone actually gets. 881KB, no PDF ever committed, all golden fixtures rebuilt from their generator.
 
-### M7 - Fixing 0.688, and four bugs hiding behind each other
+### M7: Fixing 0.688, and four bugs hiding behind each other
 Verdict accuracy was not acceptable. Four of the five failures turned out to be this project's bugs, not the model's.
 
-- **I broke this project's own rule** - stage 5 was asking a 7B model whether 5 years exceeds 36 months, while stages 2 and 4 carefully kept arithmetic away from it. A capability limit and an architectural mistake look identical from outside.
-- **Failure 17: a green test that passed for the wrong reason** - "thirty days" read as 30 MONTHS, and the eval case still passed because a fortnight is short of both.
-- **Failure 18: the same bug on the other operand** - "two weeks" read as 2 months. A comparison has two sides; fixing one is not fixing it.
-- **Failure 19: a field that existed but was never populated** - adding a field is not adding a feature.
-- **Correct facts can still mislead** - four true statements that a waiting period "does not block the claim" made the model answer covered to questions about co-payments. Accuracy fell to 0.625 while the arithmetic worked perfectly.
-- **Knowing when the number stops being a signal** - five runs, 0.688 / 0.625 / 0.812 / 0.688 / 0.812, on a set where one case is 0.0625.
+- I broke this project's own rule. Stage 5 was asking a 7B model whether 5 years exceeds 36 months, while stages 2 and 4 carefully kept arithmetic away from it. A capability limit and an architectural mistake look identical from outside.
+- Failure 17: a green test that passed for the wrong reason. "thirty days" read as 30 *months*, and the eval case still passed because a fortnight is short of both.
+- Failure 18: the same bug on the other operand. "two weeks" read as 2 months. A comparison has two sides; fixing one is not fixing it.
+- Failure 19: a field that existed but was never populated. Adding a field is not adding a feature.
+- Correct facts can still mislead. Four true statements that a waiting period "does not block the claim" made the model answer covered to questions about co-payments. Accuracy fell to 0.625 while the arithmetic worked perfectly.
+- Knowing when the number stops being a signal. Five runs, 0.688 / 0.625 / 0.812 / 0.688 / 0.812, on a set where one case is 0.0625.
 
-### M8 - Widening the ruler, and the second family of comparisons
+### M8: Widening the ruler, and the second family of comparisons
 Rebuilding the scenario eval set, and a correct fix that measured worse.
 
-- **A ruler that cannot resolve your changes** - on 16 cases one case is 0.0625, and five consecutive runs moved within that. Below its granularity a metric does not merely fail to help, it misleads, because a number that moved feels like evidence.
-- **0.812 was an easier exam, not a better system** - the same unchanged code scores 0.725 on 40 cases. The smaller set had not been asking the questions it was bad at.
-- **Recall only sees one of the two ways to be wrong** - it goes UP when a system cites more, so a fix trading under-citing for over-citing scores as a win. Hence `must_not_cite` and a separate false-citation rate.
-- **The same mistake in a family nobody had noticed was the same** - an earlier fix took DURATION comparisons away from the model and left MONEY and AGE. "Is 8,000 more than 1% of 10 lakh" is not a language question.
-- **The operand that was secretly two operands** - a co-payment keys on age AT INCEPTION, not age now. The third time this project has hit a comparison whose operands were not what they appeared to be.
-- **Failure 20: the fix made it worse by 0.125** - correct arithmetic, injected into the prompt, sent every new failure to `conditional` or `insufficient_information`.
-- **Concept 24: silence is not uncertainty** - "cannot be determined" about a room nobody mentioned manufactures doubt on nearly every question.
-- **Concept 25: the honest read on a fix that did not pay for itself** - net -2 cases, diagnosed to one specific line that carried no information and cost three cases.
+- A ruler that cannot resolve your changes. On 16 cases one case is 0.0625, and five consecutive runs moved within that. Below its granularity a metric does not merely fail to help, it misleads, because a number that moved feels like evidence.
+- 0.812 was an easier exam, not a better system. The same unchanged code scores 0.725 on 40 cases. The smaller set had not been asking the questions it was bad at.
+- Recall only sees one of the two ways to be wrong. It goes *up* when a system cites more, so a fix trading under-citing for over-citing scores as a win. Hence `must_not_cite` and a separate false-citation rate.
+- The same mistake in a family nobody had noticed was the same. An earlier fix took *duration* comparisons away from the model and left *money* and *age*. "Is 8,000 more than 1% of 10 lakh" is not a language question.
+- The operand that was secretly two operands. A co-payment keys on age *at inception*, not age now. The third time this project has hit a comparison whose operands were not what they appeared to be.
+- Failure 20: the fix made it worse by 0.125. Correct arithmetic, injected into the prompt, sent every new failure to `conditional` or `insufficient_information`.
+- Concept 24: silence is not uncertainty. "cannot be determined" about a room nobody mentioned manufactures doubt on nearly every question.
+- Concept 25: the honest read on a fix that did not pay for itself. Net -2 cases, diagnosed to one specific line that carried no information and cost three cases.
 
-### M9 - The ruler was made of rubber, and two requests at once was why
+### M9: The ruler was made of rubber, and two requests at once was why
 The eval harness had never been tested for reproducibility. It was not reproducible.
 
-- **The same code, measured three times, gave three numbers** - 0.725, 0.700, 0.750 on identical code and byte-identical prompts. Five of forty cases flip between runs; 27 always pass, 8 always fail.
-- **Concept 26: `temperature = 0` is not reproducibility** - it makes the SAMPLER deterministic, which is only half the sentence. The other half is "given the same logits", and a GPU does not reliably produce the same logits twice.
-- **Failure 22: the fix I was certain of, which changed nothing** - pinning the seed. At temperature 0 nothing draws from the random generator, so seeding it is seeding a die that is never rolled.
-- **Failure 23: claiming the cause after one observation each way** - one failure at concurrency 2 and one pass at concurrency 1 is two coin flips, not a diagnosis. Six repeats each settled it.
-- **Concept 27: float addition is not associative, and that is a product bug** - batching two requests together changes the order the matmul partial sums are combined, which changes the last bits of a logit, which flips a near-tie. The same policy was being rewritten differently on each upload.
-- **Concept 28: measure the cost of the safe choice first** - serialising "obviously" halves throughput. Measured, it cost 9%: one request already saturates an 8GB card.
-- **Failure 24: the residual, and a second fix that measured nothing** - serialising did not finish the job. Two fresh runs still score 0.650 and 0.675. The first substantive generation of a process differs from every one after it; a real warm-up call was tried, measured to change nothing, and reverted. Recorded as open.
+- The same code, measured three times, gave three numbers. 0.725, 0.700, 0.750 on identical code and byte-identical prompts. Five of forty cases flip between runs; 27 always pass, 8 always fail.
+- Concept 26: `temperature = 0` is not reproducibility. It makes the *sampler* deterministic, which is only half the sentence. The other half is "given the same logits", and a GPU does not reliably produce the same logits twice.
+- Failure 22: the fix I was certain of, which changed nothing. Pinning the seed. At temperature 0 nothing draws from the random generator, so seeding it is seeding a die that is never rolled.
+- Failure 23: claiming the cause after one observation each way. One failure at concurrency 2 and one pass at concurrency 1 is two coin flips, not a diagnosis. Six repeats each settled it.
+- Concept 27: float addition is not associative, and that is a product bug. Batching two requests together changes the order the matmul partial sums are combined, which changes the last bits of a logit, which flips a near-tie. The same policy was being rewritten differently on each upload.
+- Concept 28: measure the cost of the safe choice first. Serialising "obviously" halves throughput. Measured, it cost 9%: one request already saturates an 8GB card.
+- Failure 24: the residual, and a second fix that measured nothing. Serialising did not finish the job. Two fresh runs still score 0.650 and 0.675. The first substantive generation of a process differs from every one after it; a real warm-up call was tried, measured to change nothing, and reverted. Recorded as open.
 
-### M10 - Measuring only what changed, and a third family of arithmetic
+### M10: Measuring only what changed, and a third family of arithmetic
 Making the eval measure a change despite a model that never answers twice the same way, and fixing a case that failed in every run.
 
-- **Repeat is not sequence** - asking one question twice gave one answer; asking forty questions twice changed 7 of 10 at the level the metrics read. Test the property your conclusion depends on.
-- **Concept 29: the cache as a controlled experiment** - a content-addressed cache replays the stored bytes of any prompt that did not change, so those cases cannot have moved. Only the cases a change reached are regenerated. A one-word change reaching 2 cases: 38 replayed, 2 regenerated, exactly as predicted.
-- **Failure 25: the cache's row count lies** - a truncated answer retried with a larger limit is stored under a key nothing looks up, so "did the table grow" misses regenerations. Count model calls instead.
-- **Failure 26: counting the wrong calls** - counting fact extraction made every case look regenerated. Only the reasoning call decides a verdict.
-- **Failure 27: advice that confirmed a result with a copy of itself** - "re-run with --only" replayed the answer being doubted. Hence `--resample`.
-- **Concept 30: a version label is not a cache key** - hashing PROMPT_VERSION was redundant for safety and forced every case to regenerate on every change. Now a label only.
-- **The fix: a cover window, decided in code** - "is a scan 120 days after discharge inside a 90-day window" taken away from the model, with an anchor so before-admission and after-discharge are never compared.
-- **Failure 28: one paragraph reclassified clauses it never mentioned** - a note and a field description dropped classification from 1.000 to 0.919. The same text in a different position broke nothing. Check a prompt edit against everything the prompt does.
-- **Failure 29: a correct fix that measured net negative** - the fact extractor leaked a verdict through a free-text `notes` field. Removing the field fixed one case, broke three, and cost citations. Reverted; recorded as open.
-- **Failure 30: a warning that blamed a cause that did not exist** - reverting a change replays older answers, which the comparison had mistaken for an unrecorded run.
+- Repeat is not sequence. Asking one question twice gave one answer; asking forty questions twice changed 7 of 10 at the level the metrics read. Test the property your conclusion depends on.
+- Concept 29: the cache as a controlled experiment. A content-addressed cache replays the stored bytes of any prompt that did not change, so those cases cannot have moved. Only the cases a change reached are regenerated. A one-word change reaching 2 cases: 38 replayed, 2 regenerated, exactly as predicted.
+- Failure 25: the cache's row count lies. A truncated answer retried with a larger limit is stored under a key nothing looks up, so "did the table grow" misses regenerations. Count model calls instead.
+- Failure 26: counting the wrong calls. Counting fact extraction made every case look regenerated. Only the reasoning call decides a verdict.
+- Failure 27: advice that confirmed a result with a copy of itself. "re-run with --only" replayed the answer being doubted. Hence `--resample`.
+- Concept 30: a version label is not a cache key. Hashing PROMPT_VERSION was redundant for safety and forced every case to regenerate on every change. Now a label only.
+- The fix: a cover window, decided in code. "is a scan 120 days after discharge inside a 90-day window" taken away from the model, with an anchor so before-admission and after-discharge are never compared.
+- Failure 28: one paragraph reclassified clauses it never mentioned. A note and a field description dropped classification from 1.000 to 0.919. The same text in a different position broke nothing. Check a prompt edit against everything the prompt does.
+- Failure 29: a correct fix that measured net negative. The fact extractor leaked a verdict through a free-text `notes` field. Removing the field fixed one case, broke three, and cost citations. Reverted; recorded as open.
+- Failure 30: a warning that blamed a cause that did not exist. Reverting a change replays older answers, which the comparison had mistaken for an unrecorded run.
 
-### M11 - Reading the inputs: two bugs upstream of every verdict
+### M11: Reading the inputs: two bugs upstream of every verdict
 Two errors that happened before the model ever reasoned, found by reading the failing cases' own explanations rather than their scores. Verdict accuracy 0.725 to 0.800; failed quotations 5 to 1.
 
-- **Checking what a fix would buy, before building it** - the planned fix (code-added citations) could reach one case of 31 and would have broken another. Set aside.
-- **Failure 31: every check did its job, on a fact that was wrong** - 9 of 40 questions had the policy's age missing or replaced by the person's age. Every downstream stage was correct given its input, and the scenario eval, which scores only verdicts, could not see it.
-- **Concept 31: a schema key is part of the prompt** - under constrained decoding the key is the last thing written before the value. `policy_age` pulled in ages; `policy_held_for` fixed that and lost "after my policy started"; `time_since_policy_start` read both. Measured on held-out sentences, with a second held-out batch written after the first had been tuned against.
-- **Failure 32: eight fabricated quotes, and half were our own words** - the model copied an annotation the pipeline prints beneath each clause.
-- **Failure 33: the pipeline was telling the model things the policy does not say** - 5 of the 8 clauses given an exception were given a wrong one, one copied from the analysis prompt's own example. "The alcohol exclusion does not apply to accidents" explained a case that had failed in every run. The first diagnosis of its cause was wrong too.
-- **Concept 32: checking an extraction by its grammar, not only its text** - a substring check cannot catch real text in the wrong role. An exception must be preceded by an exception word in its own sentence.
-- **A verdict-neutral change, kept, and why** - it broke two cases and fixed two, and it stopped the system asserting falsehoods about the policy. Weighed against a structurally correct M10 fix that was reverted.
+- Checking what a fix would buy, before building it. The planned fix (code-added citations) could reach one case of 31 and would have broken another. Set aside.
+- Failure 31: every check did its job, on a fact that was wrong. 9 of 40 questions had the policy's age missing or replaced by the person's age. Every downstream stage was correct given its input, and the scenario eval, which scores only verdicts, could not see it.
+- Concept 31: a schema key is part of the prompt. Under constrained decoding the key is the last thing written before the value. `policy_age` pulled in ages; `policy_held_for` fixed that and lost "after my policy started"; `time_since_policy_start` read both. Measured on held-out sentences, with a second held-out batch written after the first had been tuned against.
+- Failure 32: eight fabricated quotes, and half were our own words. The model copied an annotation the pipeline prints beneath each clause.
+- Failure 33: the pipeline was telling the model things the policy does not say. 5 of the 8 clauses given an exception were given a wrong one, one copied from the analysis prompt's own example. "The alcohol exclusion does not apply to accidents" explained a case that had failed in every run. The first diagnosis of its cause was wrong too.
+- Concept 32: checking an extraction by its grammar, not only its text. A substring check cannot catch real text in the wrong role. An exception must be preceded by an exception word in its own sentence.
+- A verdict-neutral change, kept, and why. It broke two cases and fixed two, and it stopped the system asserting falsehoods about the policy. Weighed against a structurally correct M10 fix that was reverted.
 
-### M12 - Seven attempts, three kept, and a number that means what it says
+### M12: Seven attempts, three kept, and a number that means what it says
 Working through the remaining failures one measured change at a time. Verdict accuracy reaches 0.925 as a majority of three samples, the first score in the log that is not a single sample.
 
-- **Step 0: measure a rule before writing it** - replaying stored answers showed which cases each proposed rule would catch, and changed one rule before it existed.
-- **Fix 1 and Fix 2** - a waiting-period line that names the clause's own carve-out, and fact-extractor notes that claim coverage the person never mentioned. Each reached exactly the 2 and 1 cases predicted.
-- **Failure 34: removing the emphasis, which was carrying information** - the line suspected of distorting citations was the one making burn surgery covered. Reverted.
-- **Concept 33: checking the answer against the arithmetic** - "never contradict these results" is a request; detecting a citation of a clause the arithmetic cleared is mechanical. One retry, provably wrong citations removed, verdicts never set by code.
-- **Failure 35: a true fact that fixed three other cases and not its own** - why a change is not kept for effects it was not designed to cause.
-- **Failure 36: a second turn that chose the same wrong clauses** - a clean negative result about where citation errors come from.
-- **Failure 37: two attempts at third-person ages, both worse** - a key name is an instruction, but a guessed rename is only an experiment.
-- **Concept 34: majority of three** - a strict majority per case, run in chunks, with a replay check that proved three reverts were complete.
+- Step 0: measure a rule before writing it. Replaying stored answers showed which cases each proposed rule would catch, and changed one rule before it existed.
+- Fix 1 and Fix 2. A waiting-period line that names the clause's own carve-out, and fact-extractor notes that claim coverage the person never mentioned. Each reached exactly the 2 and 1 cases predicted.
+- Failure 34: removing the emphasis, which was carrying information. The line suspected of distorting citations was the one making burn surgery covered. Reverted.
+- Concept 33: checking the answer against the arithmetic. "never contradict these results" is a request; detecting a citation of a clause the arithmetic cleared is mechanical. One retry, provably wrong citations removed, verdicts never set by code.
+- Failure 35: a true fact that fixed three other cases and not its own. Why a change is not kept for effects it was not designed to cause.
+- Failure 36: a second turn that chose the same wrong clauses. A clean negative result about where citation errors come from.
+- Failure 37: two attempts at third-person ages, both worse. A key name is an instruction, but a guessed rename is only an experiment.
+- Concept 34: majority of three. A strict majority per case, run in chunks, with a replay check that proved three reverts were complete.
 
-### M13 - The last failures, and the answer key itself
+### M13: The last failures, and the answer key itself
 Majority-of-three verdict accuracy 0.925 to 0.975, failed quotations to zero, and an honest qualification of that number.
 
-- **Failure 38: computed lines that said more than was computed** - "the co-payment applies, so this claim is paid at 80%" for a refused claim, and a room cap ruled out without its reason.
-- **Fix: a misfiled age, checked against its source words**, and **Failure 39: a prediction made from stale data** - the check found two "I am 55" misreadings in the eval nobody had noticed.
-- **When the answer key is wrong** - two expected answers that contradicted the file's own rule, changed only by the project owner and recorded inside the cases.
-- **Concept 35: a lookup reported as a lookup** - shared unusual words as a hint, not retrieval: every clause stays in the prompt. A noisy first version hinted at 38 of 40 questions; the final one at 8, all correct, with the fitting caveat stated.
-- **A missing annexure, checked only where an answer leans on it** - and the refinement after it broke a correct answer.
-- **Failure 40: a design promise the code never kept** - the documented quote retry did not exist; built, it fixed 0 of 2; replaced by trimming appended words, with a guard against rescuing inventions.
-- **Failure 41: the test question inside the prompt** - the reasoning prompt's example is an eval case. Replacing it broke 8 cases, so the headline score depends on it. Open.
+- Failure 38: computed lines that said more than was computed. "the co-payment applies, so this claim is paid at 80%" for a refused claim, and a room cap ruled out without its reason.
+- Fix: a misfiled age, checked against its source words, and Failure 39: a prediction made from stale data. The check found two "I am 55" misreadings in the eval nobody had noticed.
+- When the answer key is wrong. Two expected answers that contradicted the file's own rule, changed only by the project owner and recorded inside the cases.
+- Concept 35: a lookup reported as a lookup. Shared unusual words as a hint, not retrieval: every clause stays in the prompt. A noisy first version hinted at 38 of 40 questions; the final one at 8, all correct, with the fitting caveat stated.
+- A missing annexure, checked only where an answer leans on it. And the refinement after it broke a correct answer.
+- Failure 40: a design promise the code never kept. The documented quote retry did not exist; built, it fixed 0 of 2; replaced by trimming appended words, with a guard against rescuing inventions.
+- Failure 41: the test question inside the prompt. The reasoning prompt's example is an eval case. Replacing it broke 8 cases, so the headline score depends on it. Open.
 
-### M14 - A score on questions it has never seen
-Held-out scenario batches, and what they said: about 0.83-0.85 on unseen questions against 0.95 on the tuned set. **If you only read one entry about evaluation, read Concept 36.**
+### M14: A score on questions it has never seen
+Held-out scenario batches, and what they said: about 0.83-0.85 on unseen questions against 0.95 on the tuned set. If you only read one entry about evaluation, read Concept 36.
 
-- **Concept 36: a score on the cases you tuned against** - hundreds of reasonable keep-or-revert decisions fit a system to its test set. The first held-out batch scored 0.750 against 0.975. Once held-out failures are read, the batch is no longer held out; a second batch was written before it was run.
-- **Failure 42: "unknown is the honest answer", and it answered nothing else** - one sentence stopped the fact extractor reading. The fix improved the extractor and cost six main-set cases, so it was reverted: the end-to-end measurement decides.
-- **A missing list, finished** - an effect label that slipped past a check, a downgrade when the retry rests on nothing checkable, and a refusal that names no refusing clause.
-- **Failure 43: a retry that talked right answers out of themselves** - turned into a filter that removes an unsupported citation and can never change a verdict.
-- **Failure 44: a fallback that destroyed a corrected answer** - the retry fixed the verdict and not the label, and the safety fallback threw the answer away.
-- **Failure 45: blaming the last change for a drop that was sampling** - check a change can reach the cases that moved before attributing the movement to it.
-- **Failure 46: a report that misdescribed its own run** - a commit stamp that could not say the tree was dirty, and a generated sentence describing a cache key M10 had removed. Plus a check of the fix that ran the old code: setting up a clean tree had removed the change under test.
+- Concept 36: a score on the cases you tuned against. Hundreds of reasonable keep-or-revert decisions fit a system to its test set. The first held-out batch scored 0.750 against 0.975. Once held-out failures are read, the batch is no longer held out; a second batch was written before it was run.
+- Failure 42: "unknown is the honest answer", and it answered nothing else. One sentence stopped the fact extractor reading. The fix improved the extractor and cost six main-set cases, so it was reverted: the end-to-end measurement decides.
+- A missing list, finished. An effect label that slipped past a check, a downgrade when the retry rests on nothing checkable, and a refusal that names no refusing clause.
+- Failure 43: a retry that talked right answers out of themselves. Turned into a filter that removes an unsupported citation and can never change a verdict.
+- Failure 44: a fallback that destroyed a corrected answer. The retry fixed the verdict and not the label, and the safety fallback threw the answer away.
+- Failure 45: blaming the last change for a drop that was sampling. Check a change can reach the cases that moved before attributing the movement to it.
+- Failure 46: a report that misdescribed its own run. A commit stamp that could not say the tree was dirty, and a generated sentence describing a cache key M10 had removed. Plus a check of the fix that ran the old code: setting up a clean tree had removed the change under test.
 
-### M15 - First contact with real policies
-Three real insurer wordings, measured before anything was fixed. **If you read one entry about why a system needs real input, read Concept 38.**
+### M15: First contact with real policies
+Three real insurer wordings, measured before anything was fixed. If you read one entry about why a system needs real input, read Concept 38.
 
-- **Getting real documents without committing them** - addresses and SHA-256 fingerprints in the repo, the PDFs fetched by script, a changed wording treated as an error.
-- **Concept 37: a probe is not an eval** - measuring whether the design's assumptions hold, before writing an answer key that would name artefacts.
-- **Failure 47: page furniture became clauses** - running headers, a wrapped toll-free number ranked the riskiest clause in the policy, table amounts as clause numbers.
-- **Failure 48: a defensive sort that interleaved two columns** - and why the offset invariant still held: a perfect slice of scrambled text is still scrambled.
-- **Concept 38: the no-retrieval premise, measured** - real policies are 6-12x the synthetic one; the shortlist kept 6-27 clauses and dropped every coverage clause on all three, becoming top-k retrieval biased toward refusal.
-- **The prompt, measured in tokens** - Ollama's own count, checked twice; 4.3 characters per token, and a reservation already smaller than the prompt it was meant to hold.
-- **Failure 49: a warning that claimed more than it measured.**
-- **Failure 50: the eval and the product gave clauses different ids** - an eval that rebuilds part of the product measures its rebuild.
-- **Failure 51: nine right answers, mostly for wrong reasons** - 9 of 10 verdicts on a real policy, read case by case: refusals through the wrong clause, payable claims through the one co-payment that makes everything conditional. A verdict-only score cannot see reasons.
-- **Failure 52: the arithmetic was right about a cap the policy does not have** - "2% subject to Rs.5,000" modelled as 2%; deterministic code is only as complete as its model of the input.
+- Getting real documents without committing them. Addresses and SHA-256 fingerprints in the repo, the PDFs fetched by script, a changed wording treated as an error.
+- Concept 37: a probe is not an eval. Measuring whether the design's assumptions hold, before writing an answer key that would name artefacts.
+- Failure 47: page furniture became clauses. Running headers, a wrapped toll-free number ranked the riskiest clause in the policy, table amounts as clause numbers.
+- Failure 48: a defensive sort that interleaved two columns. And why the offset invariant still held: a perfect slice of scrambled text is still scrambled.
+- Concept 38: the no-retrieval premise, measured. Real policies are 6-12x the synthetic one; the shortlist kept 6-27 clauses and dropped every coverage clause on all three, becoming top-k retrieval biased toward refusal.
+- The prompt, measured in tokens. Ollama's own count, checked twice; 4.3 characters per token, and a reservation already smaller than the prompt it was meant to hold.
+- Failure 49: a warning that claimed more than it measured.
+- Failure 50: the eval and the product gave clauses different ids. An eval that rebuilds part of the product measures its rebuild.
+- Failure 51: nine right answers, mostly for wrong reasons. 9 of 10 verdicts on a real policy, read case by case: refusals through the wrong clause, payable claims through the one co-payment that makes everything conditional. A verdict-only score cannot see reasons.
+- Failure 52: the arithmetic was right about a cap the policy does not have. "2% subject to Rs.5,000" modelled as 2%; deterministic code is only as complete as its model of the input.
 
-### M16 - Reading a real policy correctly
-M15's findings fixed in pipeline order, on the standard IRDAI product (Star Health's Arogya Sanjeevani). The deciding clause went from cited in 1 Star question of 10 to 5-7; right verdicts stayed at 7-8. **If you read one entry about long prompts, read Concept 44.**
+### M16: Reading a real policy correctly
+M15's findings fixed in pipeline order, on the standard IRDAI product (Star Health's Arogya Sanjeevani). The deciding clause went from cited in 1 Star question of 10 to 5-7; right verdicts stayed at 7-8. If you read one entry about long prompts, read Concept 44.
 
-- **Steps 1-3: reading the page** - PyMuPDF's own block order instead of a sort that spliced two columns; page furniture recognised by repetition in the margin; a clause number alone on its row read with the words beside it.
-- **Concept 39: evidence relative to the document** - bold means "clause number" only in a document that bolds its clause numbers, the same way font size is judged against the document's own body text.
-- **Failure 53: a threshold written down before it was measured** - "62% bold" was an estimate; measured, it was 25%, and the guessed threshold split three similar documents by rounding.
-- **Concept 40: a limit is a measurement, with a version** - the 8,192-token window from M5 re-measured on a newer runtime: 28,672 runs fully on the GPU.
-- **Failure 54: a truncation check that could never fire** - Ollama discards half the window on overflow and reports a smaller count, which the check read as healthy.
-- **Failure 55: the second detector, disproven in both directions** - a characters-per-token rule failed on long words and on numbers; the exact count `num_ctx // 2 + 2` held everywhere.
-- **Failure 56: document order was clause-number order, until numbers repeated.**
-- **Step 5: a cap with a maximum** - "2% subject to Rs.5,000 per day" computed as the lower of the two, with its working shown.
-- **Step 6: what the long window cost the machine** - the KV cache explained from the model's shape (56 KB per token), read from the runtime's own log.
-- **Failure 57: measuring memory while an eval was running** - two clients asking for different windows forced 18 model reloads in nine minutes.
-- **Concept 41: rounding the KV cache** - `q8_0` halves its memory, and moves near-tie answers; and a server setting the response cache key could not see.
-- **Failure 58: a memory measurement that could not see the workload** - a two-token prompt measured 6 GB; the server's saved-prompt store grew to 14 GB on real prompts.
-- **Failure 59: restarting Ollama left the old runner alive** - on Windows, killing a parent does not kill its child.
-- **Failure 60: a plausible cause, checked before it was built** - a replay showed the planned id change would have fixed nothing; the pipeline's own computed lines were misdirecting the model.
-- **Concept 42: a correction needs positive evidence** - a check that overrides a model acts only on evidence for the other reading, because its two kinds of mistake do not cost the same.
-- **Failures 61-64: four clauses the analysis misread** - a hospital window read as a waiting period, a per-eye cap read as a per-day room cap (on the synthetic policy too), two waiting periods stored as one number, and annexure lists run together.
-- **Failure 65: an answer that never ended took the eval with it** - fixed with a length the grammar enforces.
-- **Concept 43: the same prompt, computed two ways** - the server restores part of a prompt instead of recomputing it, so a fresh answer depends on what was asked before.
-- **Step 10: the co-payment line** - a 5% co-payment on every claim was the reason the model reached for; rewording it exposed worse reading underneath.
-- **Failure 66: a pick that did not read** - asked only to pick the relevant clauses, the model found them for 28 of 32 synthetic questions and 1-2 of 10 on Star.
-- **Concept 44: fitting in the window is not being read** - a context window has a second limit, measured on your own prompts; picking in groups of 3,000 tokens is reading, not retrieval.
-- **Failure 67: a contradiction the check could not see** - "covered" means paid in full, which a co-payment on every claim rules out whatever the answer cites.
-- **Failure 68: three samples, two of them the same one** - samples asked in the same order draw on the same server history and agree on every verdict; the honest unit was the day.
-- **Failure 69: a drop noticed and never explained** - the synthetic main set fell from 38/40 to 33/40 in a run that changed three things at once.
+- Steps 1-3: reading the page. PyMuPDF's own block order instead of a sort that spliced two columns; page furniture recognised by repetition in the margin; a clause number alone on its row read with the words beside it.
+- Concept 39: evidence relative to the document. Bold means "clause number" only in a document that bolds its clause numbers, the same way font size is judged against the document's own body text.
+- Failure 53: a threshold written down before it was measured. "62% bold" was an estimate; measured, it was 25%, and the guessed threshold split three similar documents by rounding.
+- Concept 40: a limit is a measurement, with a version. The 8,192-token window from M5 re-measured on a newer runtime: 28,672 runs fully on the GPU.
+- Failure 54: a truncation check that could never fire. Ollama discards half the window on overflow and reports a smaller count, which the check read as healthy.
+- Failure 55: the second detector, disproven in both directions. A characters-per-token rule failed on long words and on numbers; the exact count `num_ctx // 2 + 2` held everywhere.
+- Failure 56: document order was clause-number order, until numbers repeated.
+- Step 5: a cap with a maximum. "2% subject to Rs.5,000 per day" computed as the lower of the two, with its working shown.
+- Step 6: what the long window cost the machine. The KV cache explained from the model's shape (56 KB per token), read from the runtime's own log.
+- Failure 57: measuring memory while an eval was running. Two clients asking for different windows forced 18 model reloads in nine minutes.
+- Concept 41: rounding the KV cache. `q8_0` halves its memory, and moves near-tie answers; and a server setting the response cache key could not see.
+- Failure 58: a memory measurement that could not see the workload. A two-token prompt measured 6 GB; the server's saved-prompt store grew to 14 GB on real prompts.
+- Failure 59: restarting Ollama left the old runner alive. On Windows, killing a parent does not kill its child.
+- Failure 60: a plausible cause, checked before it was built. A replay showed the planned id change would have fixed nothing; the pipeline's own computed lines were misdirecting the model.
+- Concept 42: a correction needs positive evidence. A check that overrides a model acts only on evidence for the other reading, because its two kinds of mistake do not cost the same.
+- Failures 61-64: four clauses the analysis misread. A hospital window read as a waiting period, a per-eye cap read as a per-day room cap (on the synthetic policy too), two waiting periods stored as one number, and annexure lists run together.
+- Failure 65: an answer that never ended took the eval with it. Fixed with a length the grammar enforces.
+- Concept 43: the same prompt, computed two ways. The server restores part of a prompt instead of recomputing it, so a fresh answer depends on what was asked before.
+- Step 10: the co-payment line. A 5% co-payment on every claim was the reason the model reached for; rewording it exposed worse reading underneath.
+- Failure 66: a pick that did not read. Asked only to pick the relevant clauses, the model found them for 28 of 32 synthetic questions and 1-2 of 10 on Star.
+- Concept 44: fitting in the window is not being read. A context window has a second limit, measured on your own prompts; picking in groups of 3,000 tokens is reading, not retrieval.
+- Failure 67: a contradiction the check could not see. "covered" means paid in full, which a co-payment on every claim rules out whatever the answer cites.
+- Failure 68: three samples, two of them the same one. Samples asked in the same order draw on the same server history and agree on every verdict; the honest unit was the day.
+- Failure 69: a drop noticed and never explained. The synthetic main set fell from 38/40 to 33/40 in a run that changed three things at once.
 
-### M17 - What a sample is
-Testing M16's explanation of why its samples agreed, and finding a different cause. **If you read one entry about evaluating models, read Concept 45.**
+### M17: What a sample is
+Testing M16's explanation of why its samples agreed, and finding a different cause. If you read one entry about evaluating models, read Concept 45.
 
-- **Step 1: a different order for every sample** - shuffled per sample, seeded by its number; it moved 3 verdicts in 79, far less than the 10 in 69 it was meant to explain.
-- **Step 2: the reload test that had already run** - the server log showed fresh and warm servers giving the same answers.
-- **Failure 70: an explanation that fitted, and the cause nobody had looked at** - Ollama had updated itself overnight, and yesterday's stored answers came from the old version.
-- **Concept 45: the runtime is part of the model** - weights, prompt, settings, and the program that does the arithmetic; record it, hold it fixed, re-measure when it changes.
-- **Step 3: the version in the cache key** - and what it costs: about 85 minutes of fresh measurement after every update.
-- **Step 4: one runtime, measured from nothing** - 76 of 79 questions unanimous across three samples in three orders.
-- **Failure 71: a cost called small without measuring it** - asking for the version on every call made each cache hit take 0.8 s; a timing test from the first commit caught it.
-- **Failure 72: a test that emptied the evals' cache** - a cache path relative to the working directory, and a test run from the wrong one.
+- Step 1: a different order for every sample. Shuffled per sample, seeded by its number; it moved 3 verdicts in 79, far less than the 10 in 69 it was meant to explain.
+- Step 2: the reload test that had already run. The server log showed fresh and warm servers giving the same answers.
+- Failure 70: an explanation that fitted, and the cause nobody had looked at. Ollama had updated itself overnight, and yesterday's stored answers came from the old version.
+- Concept 45: the runtime is part of the model. Weights, prompt, settings, and the program that does the arithmetic; record it, hold it fixed, re-measure when it changes.
+- Step 3: the version in the cache key. And what it costs: about 85 minutes of fresh measurement after every update.
+- Step 4: one runtime, measured from nothing. 76 of 79 questions unanimous across three samples in three orders.
+- Failure 71: a cost called small without measuring it. Asking for the version on every call made each cache hit take 0.8 s; a timing test from the first commit caught it.
+- Failure 72: a test that emptied the evals' cache. A cache path relative to the working directory, and a test run from the wrong one.
 
-### M18 - The first thing a user sees
-Five things wrong on screen that no eval in the repository could see, found by using the app by hand on a real policy. **If you read one entry about prompts, read Concept 48.**
+### M18: The first thing a user sees
+Five things wrong on screen that no eval in the repository could see, found by using the app by hand on a real policy. If you read one entry about prompts, read Concept 48.
 
-- **Failure 73: the worst clause in the policy, and the policy never said it** - an unnumbered fragment ending "in respect of;" was cut off from the twenty-two exclusions that complete it, read correctly as excluding everything, and ranked second on the dashboard.
-- **Failure 73b: a guard that switched the fix off where it was needed** - the comment reasoned about the lead-in's length and the code tested the merged length; a guard should re-establish the invariant, not abandon the work.
-- **Failure 74: nine headings the segmenter could not read** - "S T A N D A R D  E X C L U S I O N S" contains no word a word-boundary rule can find.
-- **Concept 46: reading what the page says, not what the file contains** - a PDF stores glyph positions, so letter-spacing shatters words; the typesetter's own word gap is what puts them back.
-- **Failure 75: a reading level that does not exist** - Flesch-Kincaid divides by sentences, a list of 145 item names ends none, and the card reported grade 94. Includes the line-break fix that was measured and rejected first.
-- **Failure 76: an exact quotation, marked unreliable** - a correct answer flagged "Not verified" for quoting parts A, D and E of a clause and skipping B and C.
-- **Concept 47: provenance and meaning are different questions** - loosening the project's core grounding check safely, and why a check that cries wolf degrades into no check at all rather than into a stricter one.
-- **Failure 77: asking for facts about an answer it had already decided** - one list serving the reasoning prompt and the interface, which need opposite things from it; and a pre-existing condition stated twice in the question and read as unknown, because settling it is a subtraction.
-- **Failure 78: five prompts to add one field, and what three of them broke** - an example about hernias cost an age; a denial naming two fields caused a subtraction between them; the same lines placed at the end of the prompt rewrote a field no instruction covers. Includes the stale answer key: "regressions" that were already failing on `main`, and a note that four of the check's sentences sit inside the prompt they test.
-- **Concept 48: a prompt is not a list of independent rules** - adding an instruction for one field competes for attention with every other field, and the fields it damages are the ones nothing warned you to look at.
+- Failure 73: the worst clause in the policy, and the policy never said it. An unnumbered fragment ending "in respect of;" was cut off from the twenty-two exclusions that complete it, read correctly as excluding everything, and ranked second on the dashboard.
+- Failure 73b: a guard that switched the fix off where it was needed. The comment reasoned about the lead-in's length and the code tested the merged length; a guard should re-establish the invariant, not abandon the work.
+- Failure 74: nine headings the segmenter could not read. "S T A N D A R D  E X C L U S I O N S" contains no word a word-boundary rule can find.
+- Concept 46: reading what the page says, not what the file contains. A PDF stores glyph positions, so letter-spacing shatters words; the typesetter's own word gap is what puts them back.
+- Failure 75: a reading level that does not exist. Flesch-Kincaid divides by sentences, a list of 145 item names ends none, and the card reported grade 94. Includes the line-break fix that was measured and rejected first.
+- Failure 76: an exact quotation, marked unreliable. A correct answer flagged "Not verified" for quoting parts A, D and E of a clause and skipping B and C.
+- Concept 47: provenance and meaning are different questions. Loosening the project's core grounding check safely, and why a check that cries wolf degrades into no check at all rather than into a stricter one.
+- Failure 77: asking for facts about an answer it had already decided. One list serving the reasoning prompt and the interface, which need opposite things from it; and a pre-existing condition stated twice in the question and read as unknown, because settling it is a subtraction.
+- Failure 78: five prompts to add one field, and what three of them broke. An example about hernias cost an age; a denial naming two fields caused a subtraction between them; the same lines placed at the end of the prompt rewrote a field no instruction covers. Includes the stale answer key: "regressions" that were already failing on `main`, and a note that four of the check's sentences sit inside the prompt they test.
+- Concept 48: a prompt is not a list of independent rules. Adding an instruction for one field competes for attention with every other field, and the fields it damages are the ones nothing warned you to look at.
 
-### M19 - One clause list, built in one place
+### M19: One clause list, built in one place
 The scenario endpoint and the scenario eval each built the clause list by hand, seventeen fields apiece; now one function builds it for both, and the eval goes through the database the way an upload does.
 
-- **Concept 49: a deep module, and the deletion test** - a small interface over a lot of behaviour; imagine deleting the module and see whether complexity vanishes or reappears in every caller.
-- **Concept 50: a seam, and when one is real** - a parameter that lets the eval run the real pipeline on an in-memory database; why a parameter beat an environment variable (import order).
-- **Failure 79: an architecture review that overstated its evidence** - "already drifted" turned out to be a dead field and two equivalent filters; the change was still worth making, for a weaker and truer reason.
-- **Failure 80: thirty-six tests broken by a field's position** - a dataclass constructor is positional, so field order is part of its interface.
-- **Part 2: one duration rule, one meaning of "stated"** - three copies of a unit conversion and three of a "was this said" test become one each; why a `Facts` class was rejected, and a pre-existing-condition gap left open until a case shows it costs an answer.
+- Concept 49: a deep module, and the deletion test. A small interface over a lot of behaviour; imagine deleting the module and see whether complexity vanishes or reappears in every caller.
+- Concept 50: a seam, and when one is real. A parameter that lets the eval run the real pipeline on an in-memory database; why a parameter beat an environment variable (import order).
+- Failure 79: an architecture review that overstated its evidence. "already drifted" turned out to be a dead field and two equivalent filters; the change was still worth making, for a weaker and truer reason.
+- Failure 80: thirty-six tests broken by a field's position. A dataclass constructor is positional, so field order is part of its interface.
+- Part 2: one duration rule, one meaning of "stated". Three copies of a unit conversion and three of a "was this said" test become one each; why a `Facts` class was rejected, and a pre-existing-condition gap left open until a case shows it costs an answer.
 
-### M20 - The reasoning request, built in one place
+### M20: The reasoning request, built in one place
 The prompt and the schema's clause-id enum must be built from one clause list or the grounding guarantee lapses; one function now returns both, for the pipeline, the evals and the tests.
 
-- **Concept 51: a circular import, and why it was hidden inside a function** - how Python loads modules, why an import inside a function avoids the crash, and why that is a design problem rather than a fix.
-- **Failure 81: a docstring that said the check measured what the eval sends** - the determinism check's "exactly the operation the eval performs" sent prompts with no facts and no computed blocks; corrected, with the real-prompt version left as its own measured change.
+- Concept 51: a circular import, and why it was hidden inside a function. How Python loads modules, why an import inside a function avoids the crash, and why that is a design problem rather than a fix.
+- Failure 81: a docstring that said the check measured what the eval sends. The determinism check's "exactly the operation the eval performs" sent prompts with no facts and no computed blocks; corrected, with the real-prompt version left as its own measured change.
 
-### M21 - Another policy covering the same claim
-A case that never cited the policy's contribution clause, a fix built the project's usual way (the model reads the fact, code finds the clause), a first version that cost four main-set answers through a side channel, and a rebuild proven to touch only the three questions it was meant to. **If you read one entry about measuring, read Failure 83.**
+### M21: Another policy covering the same claim
+A case that never cited the policy's contribution clause, a fix built the project's usual way (the model reads the fact, code finds the clause), a first version that cost four main-set answers through a side channel, and a rebuild proven to touch only the three questions it was meant to. If you read one entry about measuring, read Failure 83.
 
-- **Failure 82: the target fixed, the new cases not** - the clause is now cited every time; a held-out batch written first stays at 0 of 3, for one extraction miss and two cases of the pre-existing-disease waiting period over-applied.
-- **Failure 83: three breaks, and what actually caused them** - resampling, then holding the facts fixed and swapping one field, separates a real regression from answers that depend on the question asked before them.
-- **Concept 52: a free-text field is a side channel** - adding one structured field rewrote the free-text notes for every question, and the reasoning step read the new wording differently.
-- **The rebuild: a lookup instead of a fact** - reading the person's words with a fixed pattern, and proving by request comparison that only 3 of 72 questions change, so the other 69 need no re-measuring.
+- Failure 82: the target fixed, the new cases not. The clause is now cited every time; a held-out batch written first stays at 0 of 3, for one extraction miss and two cases of the pre-existing-disease waiting period over-applied.
+- Failure 83: three breaks, and what actually caused them. Resampling, then holding the facts fixed and swapping one field, separates a real regression from answers that depend on the question asked before them.
+- Concept 52: a free-text field is a side channel. Adding one structured field rewrote the free-text notes for every question, and the reasoning step read the new wording differently.
+- The rebuild: a lookup instead of a fact. Reading the person's words with a fixed pattern, and proving by request comparison that only 3 of 72 questions change, so the other 69 need no re-measuring.
 
-### After M21 - Testing the scenario endpoint without a model
+### After M21: Testing the scenario endpoint without a model
 The endpoint's own work around the model's answer (loading clauses, mapping citations to pages, saving the run) had only a live-model test; one test now covers it with `run_scenario` replaced by a fixed answer, and was broken on purpose twice to prove it can fail.
 
-### M22 - Whether an illness began before the policy
+### M22: Whether an illness began before the policy
 "The knee trouble only started after I took the policy out" was read as unknown, and the claim refused under the pre-existing disease waiting period. A fixed pattern now settles the plain "it began after" case, the waiting-period check is told, and every waiting-period line names what it is for. Part 3 fixes the two costs parts 1-2 left: a scoring rule corrected after rescoring every stored answer, and list-type waiting periods (specified disease, maternity) that now open by saying they bar only their list. 64/78 from 60/78.
 
-- **Failure 84: the "yes" direction broke a case that was already right** - a true "pre-existing: yes" made the model refuse a served claim under the cosmetic exclusion, five times in five.
-- **Concept 53: a fix that acts in one direction only** - settle a fact only in the direction measured to help, and leave the other as a judgement.
-- **Failure 85: the batch written for this milestone did not move** - with the pre-existing bar settled, the model refuses under the specified-disease period instead, whose line names a category but not its list.
-- **Part 3: fixing the two costs** - why the obvious fix ("none of your words are on the list") was unsafe ("gave birth" doesn't match "childbirth"), and the narrower line built instead; the held-out batch moves from 1/6 to 2/6 and the kidney-stone case that started M22 is fixed.
+- Failure 84: the "yes" direction broke a case that was already right. A true "pre-existing: yes" made the model refuse a served claim under the cosmetic exclusion, five times in five.
+- Concept 53: a fix that acts in one direction only. Settle a fact only in the direction measured to help, and leave the other as a judgement.
+- Failure 85: the batch written for this milestone did not move. With the pre-existing bar settled, the model refuses under the specified-disease period instead, whose line names a category but not its list.
+- Part 3: fixing the two costs. Why the obvious fix ("none of your words are on the list") was unsafe ("gave birth" doesn't match "childbirth"), and the narrower line built instead; the held-out batch moves from 1/6 to 2/6 and the kidney-stone case that started M22 is fixed.
 
-### M23 - A waiting period that bars only its list
+### M23: A waiting period that bars only its list
 The model quoted the specified-disease list in its own answer and still applied it to appendicitis. The list is now quoted into the waiting-period line itself (short clauses only), and the check that recognises list-type periods now works on real PDFs. 66/78 from 64/78.
 
-- **Two wordings, tried before any code** - quoting the list helped; also naming the person's treatment beside it was worse.
-- **Concept 54: a ligature, and why "Speciﬁed" is not "Specified"** - PDFs store "fi" as one character, so M22's line had never been used on Star's real policy; Unicode NFKC normalization, and why every text pattern on PDF text should run on normalized text.
-- **Failure 86: the right answer, now for the wrong reason** - on Star, removing one blunt "blocks" line let a definitions block misfiled as a waiting period (`c7`) become the cited reason; left as its own fix.
+- Two wordings, tried before any code. Quoting the list helped; also naming the person's treatment beside it was worse.
+- Concept 54: a ligature, and why "Speciﬁed" is not "Specified". PDFs store "fi" as one character, so M22's line had never been used on Star's real policy; Unicode NFKC normalization, and why every text pattern on PDF text should run on normalized text.
+- Failure 86: the right answer, now for the wrong reason. On Star, removing one blunt "blocks" line let a definitions block misfiled as a waiting period (`c7`) become the cited reason; left as its own fix.
 
-### M24 - A definitions block is not a waiting period
+### M24: A definitions block is not a waiting period
 Star's definitions page, cut into pieces for length, left one piece typed as a 36-month waiting period, and every Star question was told it blocked the claim. Why the classification prompt's tie-breaker order did it, why the fix went in the waiting-period check rather than the prompt, and a "means" count measured on three policies before the rule was written.
 
-- **Failure 87: the score fell, and the change was kept** - Star 9/10 → 8/10 verdicts: the treatment-abroad answer had been right only because of the false line. A verdict is only as good as the clause it rests on.
+- Failure 87: the score fell, and the change was kept. Star went from 9/10 to 8/10 verdicts: the treatment-abroad answer had been right only because of the false line. A verdict is only as good as the clause it rests on.
 
-### M25 - Treatment outside India
+### M25: Treatment outside India
 "Hospitalised ... on holiday in Dubai" was never connected with Star's two-line exclusion of treatment outside India. A word lookup on the question now names the clause, in a firm line when only a place abroad is named and a soft one when India is named too. Questions about place 4/8 → 7/8; Star 9/10.
 
-- **Failure 88: a hedged line changed nothing** - "if outside India, read this clause as deciding" lost to the firm lines around it; opening with the fact worked, but refused a claim treated in Chennai until the soft fallback.
-- **The fallback, and keeping the test honest** - why the Chennai trap stopped counting once the fix was designed around it, and the three fresh questions written before the fallback's code.
+- Failure 88: a hedged line changed nothing. "if outside India, read this clause as deciding" lost to the firm lines around it; opening with the fact worked, but refused a claim treated in Chennai until the soft fallback.
+- The fallback, and keeping the test honest. Why the Chennai trap stopped counting once the fix was designed around it, and the three fresh questions written before the fallback's code.
 
-### M26 - Quoting a real policy's list
+### M26: Quoting a real policy's list
 M23's 600-character limit kept Star's specified-disease list out of the waiting-period line, and the dengue answer applied the list to dengue. Checked against the real constraints (context window, picking step, overflow check), the limit was too cautious; raised to 2,500. Star deciding clause cited 8/10 → 9/10.
 
-### M27 - HDFC's waiting periods
+### M27: HDFC's waiting periods
 The first questions on a second real policy. HDFC refused almost every claim in its first three years: plan-table rows read as 60- and 180-day waiting periods, lettered IRDAI exclusions never split, "PED" unrecognised, optional covers with nothing marking them narrow. Fixed rule by rule, each checked across five policies and shown by request comparison to touch only HDFC. HDFC 4/9 → 7/9; Star cited 9/10 → 8/10.
-- **Failure 89: five more lines said "blocks"** - the first fix was correct and moved nothing; only measuring it alone showed what remained.
-- **Splitting HDFC's lettered exclusions** - why the IRDAI code, not the letter, makes a line safe to treat as a clause, and why it becomes the id.
-- **Failure 90: a long quote drowned the line beside it** - a 2,400-character list quote; a reordering rejected because it changed 25 other requests; quoting only the list, and the Star citation it cost.
+- Failure 89: five more lines said "blocks". The first fix was correct and moved nothing; only measuring it alone showed what remained.
+- Splitting HDFC's lettered exclusions. Why the IRDAI code, not the letter, makes a line safe to treat as a clause, and why it becomes the id.
+- Failure 90: a long quote drowned the line beside it. A 2,400-character list quote; a reordering rejected because it changed 25 other requests; quoting only the list, and the Star citation it cost.
 
-### M28 - Two explanations that measurement refuted
+### M28: Two explanations that measurement refuted
 HDFC still paid an illness inside its 30-day wait although the line said it "still applies and blocks". Two fixes were tried one at a time: stating both sides in days, and putting periods that bar everything before narrow ones. Neither fixed it, and ordering cost 3 of 32 answers elsewhere; both reverted. Keeps three new HDFC questions (HDFC 9/12).
-- **Failure 91: two plausible explanations, both wrong** - why a 7B model's reasoning text is not a trace of its answer, and why only one-change-at-a-time measurement settles it.
+- Failure 91: two plausible explanations, both wrong. Why a 7B model's reasoning text is not a trace of its answer, and why only one-change-at-a-time measurement settles it.
 
-### M29 - HDFC's 180-day window after discharge
+### M29: HDFC's 180-day window after discharge
 Analysis never recorded clause 1.6's window, so expenses months after discharge got no computed line. A window stated in figures is now read off a coverage clause's own words (never off the options that change it for one plan). Fresh 200-day scan fixed; HDFC 11/14.
-- **Failure 92: a firm, correct line, and an invented co-payment** - the window line said "does NOT pay", and the model built a 20% co-payment out of a sentence saying there is none.
+- Failure 92: a firm, correct line, and an invented co-payment. The window line said "does NOT pay", and the model built a 20% co-payment out of a sentence saying there is none.
 
-### M30 - Cleanups, part 1: ligatures in the word lookups
+### M30 cleanups, part 1: ligatures in the word lookups
 The word lookups that put "the clause naming your treatment" in the prompt read "ﬁstula" as "stula". Normalised where the matching happens; 0 of 17 Star requests change, so no score moves. Also: Ollama pinned back to 0.35.1.
-- **Failure 93: the right normalisation at the wrong layer** - normalising at ingest also changed what the model reads; four Star clauses were re-analysed differently, a room-rent cap vanished, and a verdict was lost.
+- Failure 93: the right normalisation at the wrong layer. Normalising at ingest also changed what the model reads; four Star clauses were re-analysed differently, a room-rent cap vanished, and a verdict was lost.
 
-### M30 - Cleanups, part 2: HDFC's annexures, found inside "Contact Us"
+### M30 cleanups, part 2: HDFC's annexures, found inside "Contact Us"
 The "unanalysed ombudsman clause" was HDFC's three annexures segmented as pieces of "Contact Us"; the model looped copying the 68 non-payable items. Bold "Annexure X" lines now start a section (bold separates headings from mentions on six PDFs). Synthetic and Star unchanged; HDFC re-rolled and measured, 11/14 to 12/14.
-- **Why doubling the token limit cannot fix a loop** - a long answer needs room; a repeating one fills any room.
+- Why doubling the token limit cannot fix a loop. A long answer needs room; a repeating one fills any room.
 
-### M30 - Cleanups, part 3: the determinism check now asks what the eval asks
+### M30 cleanups, part 3: the determinism check now asks what the eval asks
 The sequence check built its own, shorter prompts (no facts, no computed lines), so it measured the stability of questions the eval never asks. It now calls `run_scenario`, the eval's own function. Proven by cache lookup: 0 of 16 requests matched the eval's before, 20 of 20 after. First real result: 2 of 8 cases differ between two passes.
 
-### M30 - Cleanups, part 4: "which questions did this change reach?" as one command
+### M30 cleanups, part 4: "which questions did this change reach?" as one command
 `evals/compare_requests.py` lists the eval questions whose requests differ between two checkouts, without generating an answer. Replaces a throwaway script rewritten every milestone; checked against a known result (14 of 109, all HDFC). Also records why the larger "run trace" proposal was not built.
 
-### M31 - A line in the prompt is a request; a check in code is a rule
-Typhoid on day 20 was paid and physiotherapy at seven months half-paid, although the prompt stated the computed result for both. The consistency check never read an unserved waiting period or a cover window. Two rules added, each measured for false alarms on 109 stored answers before any model call. HDFC 12/14 to 14/14. **If you read one entry on why prompts alone are not enough, read this one.**
-- **Concept 55: precision before recall, when a check can do harm** - a rule that re-asks the model is judged first on the right answers it would disturb; one obvious rule caught 2 and disturbed 14.
-- **A correction to Failure 92** - the "invented" 20% co-payment is an example in the system prompt.
+### M31: A line in the prompt is a request; a check in code is a rule
+Typhoid on day 20 was paid and physiotherapy at seven months half-paid, although the prompt stated the computed result for both. The consistency check never read an unserved waiting period or a cover window. Two rules added, each measured for false alarms on 109 stored answers before any model call. HDFC 12/14 to 14/14. If you read one entry on why prompts alone are not enough, read this one.
+- Concept 55: precision before recall, when a check can do harm. A rule that re-asks the model is judged first on the right answers it would disturb; one obvious rule caught 2 and disturbed 14.
+- A correction to Failure 92. The "invented" 20% co-payment is an example in the system prompt.
 
-### M32 - The right verdict for the wrong reason
+### M32: The right verdict for the wrong reason
 Star refused a dengue claim on day 20 as a pre-existing disease nobody described, and never cited the 30-day clause that decides it. The mirror of M31's rule asks again when a refusal ignores an unserved general waiting period. Dengue and HDFC gastroenteritis now cite the deciding clause 3 of 3; main set 37/40.
-- **Failure 94: "unanimous, 3 of 3" was not a stable answer** - one Star question was right in every sample on one day and wrong in 11 of 12 three days later, with the request, settings and driver all unchanged. What three samples from one run can and cannot show.
+- Failure 94: "unanimous, 3 of 3" was not a stable answer. One Star question was right in every sample on one day and wrong in 11 of 12 three days later, with the request, settings and driver all unchanged. What three samples from one run can and cannot show.
 
-### M33 - Three more candidates for the consistency check: two built, one refused
+### M33: Three more candidates for the consistency check: two built, one refused
 A caesarean answered by reading the maternity exclusion backwards; a group cover's share ignored; thyroid delayed by a list that does not name it. Each investigated from stored answers first, which showed that two "groups" of failures were several unrelated ones. Star 9/10, held-out 3 1/3.
-- **Failure 95: zero false alarms on stored answers, six of six on fresh ones** - a rule that passed every model-free check refused a correct HDFC answer in a new server session. A rule's reach is its precondition, not what the last run answered; the three-step procedure that follows.
-- **Why one rule was refused** - the same word lookup is safe when a match triggers a re-ask toward refusing, and unsafe when a non-match would push toward paying: it misses 26 of 52 conditions the lists really bar.
+- Failure 95: zero false alarms on stored answers, six of six on fresh ones. A rule that passed every model-free check refused a correct HDFC answer in a new server session. A rule's reach is its precondition, not what the last run answered; the three-step procedure that follows.
+- Why one rule was refused. The same word lookup is safe when a match triggers a re-ask toward refusing, and unsafe when a non-match would push toward paying: it misses 26 of 52 conditions the lists really bar.
 
-### M34 - An exclusion hidden under the wrong heading
+### M34: An exclusion hidden under the wrong heading
 A fall "after drinking heavily" was answered covered: the sentence excluding alcohol sits under the heading "Intentional Self-Injury", and "drinking" shares no word with "alcohol". A word lookup on the question, checked only when the answer pays; no prompt line added, so no first request changes.
-- **Failure 96: the rule that only asked when the clause was not cited** - right 3/3 in one server session, wrong 2/3 in the next, where the model said covered while citing the exclusion as "reduces". Citing a clause is not applying it.
-- **Follow-up, Failure 97: a total that did not move hid four cases that did** - the full run after M34 scored 37/40 again: two cases gained, two lost, on identical requests. One loss was noise (right 3 of 3 minutes later); the other is a hole in M31's rule that trusts the label "permits", recorded and left open. Why runs are compared case by case, never by the total.
+- Failure 96: the rule that only asked when the clause was not cited. Right 3/3 in one server session, wrong 2/3 in the next, where the model said covered while citing the exclusion as "reduces". Citing a clause is not applying it.
+- Follow-up, Failure 97: a total that did not move hid four cases that did. The full run after M34 scored 37/40 again: two cases gained, two lost, on identical requests. One loss was noise (right 3 of 3 minutes later); the other is a hole in M31's rule that trusts the label "permits", recorded and left open. Why runs are compared case by case, never by the total.
 
-### M35 - The label "permits" is the model's opinion of its own answer
+### M35: The label "permits" is the model's opinion of its own answer
 A chest infection two weeks into the policy was paid because the check stood down whenever the model labelled the waiting-period clause "permits". The rule: a check may read the verdict and the citations, never the model's description of its own reasoning. Also a second rule for a definite verdict on a waiting period nobody can time (Star gallstones).
-- **Failure 98: the re-ask worded as a correction** - "You answered covered, but ..." refused a person hit by a car, 4 of 4. The same content as a two-way question kept that answer and fixed the wrong ones.
-- **Failure 99: correcting a fact made the answer worse** - working out "held 2 years" from two stated ages turned "cannot tell" into a refusal under the pre-existing-disease clause, 3 of 3. Reverted.
-- **Investigated and left alone** - five open cases, each with the candidate rule and the number that ruled it out.
-- **Follow-up: the full run, 38/40** - compared case by case with the run before it; one case that was called noise turns out to be wrong in every full run and right on its own.
+- Failure 98: the re-ask worded as a correction. "You answered covered, but ..." refused a person hit by a car, 4 of 4. The same content as a two-way question kept that answer and fixed the wrong ones.
+- Failure 99: correcting a fact made the answer worse. Working out "held 2 years" from two stated ages turned "cannot tell" into a refusal under the pre-existing-disease clause, 3 of 3. Reverted.
+- Investigated and left alone. Five open cases, each with the candidate rule and the number that ruled it out.
+- Follow-up: the full run, 38/40. Compared case by case with the run before it; one case that was called noise turns out to be wrong in every full run and right on its own.
 
-### M36 - The last two misses in the main set: one fixed, one deliberately left
+### M36: The last two misses in the main set: one fixed, one deliberately left
 An injury "while being arrested for shoplifting" was paid, but only when the server had just answered other questions; and a 72-year-old's pneumonia was answered "cannot tell". The first gets a word lookup and a two-way question; the second gets a fix that worked on the eval and was refused.
-- **Why a question can be right alone and wrong in a full run** - reproduced: right 4 of 4 after at most one other question, wrong 6 of 7 after two or more.
-- **Failure 100: a two-way question is still not neutral** - with the refusing option listed first, an unrelated arrest turned an appendix claim into a refusal, 3 of 3. The order of the options is part of the question.
-- **Failure 101: clean on every eval question, wrong one step outside** - a rule whose precondition matches only the case it was built for has not been tested at all. Five questions written beside it showed it paying claims it should refuse.
-- **Follow-up: the full run, 39/40** - one answer changed from the run before, the one the fix was for; what the score does and does not mean.
+- Why a question can be right alone and wrong in a full run. Reproduced: right 4 of 4 after at most one other question, wrong 6 of 7 after two or more.
+- Failure 100: a two-way question is still not neutral. With the refusing option listed first, an unrelated arrest turned an appendix claim into a refusal, 3 of 3. The order of the options is part of the question.
+- Failure 101: clean on every eval question, wrong one step outside. A rule whose precondition matches only the case it was built for has not been tested at all. Five questions written beside it showed it paying claims it should refuse.
+- Follow-up: the full run, 39/40. One answer changed from the run before, the one the fix was for; what the score does and does not mean.
 
-### M37 - Eight open cases, four candidate fixes, nothing merged
+### M37: Eight open cases, four candidate fixes, nothing merged
 The remaining wrong answers attempted once more, each candidate tested on the eval and on questions written beside it. Read this to understand where the design stops working with a 7B model, and why.
-- **Failure 102: right in one session, and paying a refused claim in the next** - a fix for a wrongly cited clause turned a correct refusal (bungee jumping) into "covered". A re-ask is a push: ask which way the answer moves if the model simply gives way.
-- **What this milestone establishes** - the model cannot tell old illness from new without an expected word, agrees a condition is on a list that omits it, and often takes the option that changes its answer. Followed by a dated note on how much of the "ceiling" claim the evidence carries, and a correction: the open list is eleven cases, not eight.
-- **The probe questions and rejected patches** are in `evals/probes/m37/`.
+- Failure 102: right in one session, and paying a refused claim in the next. A fix for a wrongly cited clause turned a correct refusal (bungee jumping) into "covered". A re-ask is a push: ask which way the answer moves if the model simply gives way.
+- What this milestone establishes. The model cannot tell old illness from new without an expected word, agrees a condition is on a list that omits it, and often takes the option that changes its answer. Followed by a dated note on how much of the "ceiling" claim the evidence carries, and a correction: the open list is eleven cases, not eight.
+- The probe questions and rejected patches are in `evals/probes/m37/`.
 
-### M38 - A false line removed from the prompt, and the answer got worse
+### M38: A false line removed from the prompt, and the answer got worse
 Star's maternity exclusion is printed with an exception it does not have. A three-line fix to the exception check removes exactly that one line across three policies, and was reverted.
-- **Failure 103: the answer was right because of the false line** - with it, the model's wrong first answer cites the exclusion and a check catches it (right 3 of 3); without it, the model ignores the exclusion and promises a caesarean at 95% (wrong 3 of 3). A right answer is not evidence of a right process.
-- **Why the check was not widened** - the word lookup it would rely on names an exclusion in 5 questions and is right about one.
-- **Follow-up: every set run in full, in one session** - 100 of 109, every total as the README had it, and the same nine misses by name. The hand-kept list of open cases had lost three, two of them refused claims answered as paid (a war injury, treatment in Toronto). Why the report says 37/40 and the README 39/40.
+- Failure 103: the answer was right because of the false line. With it, the model's wrong first answer cites the exclusion and a check catches it (right 3 of 3); without it, the model ignores the exclusion and promises a caesarean at 95% (wrong 3 of 3). A right answer is not evidence of a right process.
+- Why the check was not widened. The word lookup it would rely on names an exclusion in 5 questions and is right about one.
+- Follow-up: every set run in full, in one session. 100 of 109, every total as the README had it, and the same nine misses by name. The hand-kept list of open cases had lost three, two of them refused claims answered as paid (a war injury, treatment in Toronto). Why the report says 37/40 and the README 39/40.
 
-### M39 - The app, used once from start to finish in a browser
+### M39: The app, used once from start to finish in a browser
 Upload, analysis, the ranked clause map, a clause's detail panel and three questions with known answers, driven in Chrome. It works; a short entry. Read it for what a browser showed that no eval score does: a stated time that had gone stale, a right verdict explained with the wrong clause, the schema's own label leaking into text meant for a person, and the app and the eval keeping separate answer caches.
 
-### M40 - Three old entries, read again against today's code
+### M40: Three old entries, read again against today's code
 Failures 21, 32/33 and 78 checked line by line against the repository, with no model run. All three lessons hold; the faults were sentences true when written and false now, a story that stopped one step early, counts that disagreed with their own tables, and claims a size larger than their evidence. Read it before quoting any early entry, and for the dated notes now sitting inside those three.
 
-- **Concept 56: a log entry has a date even when it does not print one** - why present-tense statements about code go stale, and three habits that prevent it.
+- Concept 56: a log entry has a date even when it does not print one. Why present-tense statements about code go stale, and three habits that prevent it.
 
-### M41 - Three more entries read against the code, and evidence that was not in the repository
+### M41: Three more entries read against the code, and evidence that was not in the repository
 Failures 95, 102 and 103 checked the same way. The recent entries are accurate about the code; their fault is conclusions larger than their evidence, all three in the same direction. M37's probe questions, which it called the test set for the hosted comparison, turned out to live in a temporary folder and are now in `evals/probes/m37/`. Read it with M40 before retelling any of the six.
 
-- **Concept 57: evidence belongs where the claim is** - if an entry says "these are the test set", the files go in the same commit.
+- Concept 57: evidence belongs where the claim is. If an entry says "these are the test set", the files go in the same commit.
 
-### M42 - The questions nobody had asked about the maternity clause
+### M42: The questions nobody had asked about the maternity clause
 Five held-out questions on Star's exclusion 18, written and committed before any run, asked in two server sessions. 3 of 5 both times. Read it for the first measurement of what M38's false exception line actually costs, and for a bug that only shows on a question the model gets wrong.
-- **Failure 104: the false exception switched off the check that would have caught it** - the stored exception contains "pregnancy"; any question saying "pregnant" makes the code stand its exclusion check down, and a refused caesarean is promised at 95%.
-- **Concept 58: a line in the prompt can have two readers** - the model followed the clause over the false line; the code, matching words, followed the line.
+- Failure 104: the false exception switched off the check that would have caught it. The stored exception contains "pregnancy"; any question saying "pregnant" makes the code stand its exclusion check down, and a refused caesarean is promised at 95%.
+- Concept 58: a line in the prompt can have two readers. The model followed the clause over the false line; the code, matching words, followed the line.
 
-### M43 - The bracket fix measured again, on seven questions, and reverted again
+### M43: The bracket fix measured again, on seven questions, and reverted again
 M38's fix for the false maternity exception, re-measured now that there are seven questions about the clause and a known second way the false line does harm. Two arms, two server sessions: 5 of 7 right without the fix, 4 of 7 with it. Read it for a fully worked case of a correct change exposing a second error.
-- **Failure 105: the check came back on, and refused a claim the policy pays** - with the false exception gone, the exclusion check fires on an ectopic pregnancy, because the true exception was never extracted. The false one had been standing in for it.
-- **Concept 59: fixing one of two compensating errors makes things worse** - when a correct fix measures worse, look for the second error it uncovered.
-- **What would have to be true for this fix to be kept** - three separate conditions, each its own measured change.
+- Failure 105: the check came back on, and refused a claim the policy pays. With the false exception gone, the exclusion check fires on an ectopic pregnancy, because the true exception was never extracted. The false one had been standing in for it.
+- Concept 59: fixing one of two compensating errors makes things worse. When a correct fix measures worse, look for the second error it uncovered.
+- What would have to be true for this fix to be kept. Three separate conditions, each its own measured change.
 
-### M44 - The missing exception read from the clause, and the false one finally removed
+### M44: The missing exception read from the clause, and the false one finally removed
 The fix that lost twice, kept on the third attempt once the second error was repaired with it. A survey of all three policies shows why the general repair was not built; a narrow rule adds exactly one line, "ectopic pregnancy". Same score as before (5 of 7), no question worse, and the prompt no longer states something false about the policy.
-- **Measured before building** - sixty-two exception words with no stored exception, and why copying what follows them would assert more falsehoods than it removed.
-- **Why it was kept, when the score is the same** - verdict-neutral, removes a falsehood, and the two remaining wrong answers now have a cause in named code and not in bad data.
-- **Failure 106: the first version read the page layout, not the clause** - it worked only because Star's PDF puts "a." and "b." on their own lines, and its good behaviour on HDFC rested on a missing space. Fixed so layout does not matter, with a limit that reads nothing from long lists.
+- Measured before building. Sixty-two exception words with no stored exception, and why copying what follows them would assert more falsehoods than it removed.
+- Why it was kept, when the score is the same. Verdict-neutral, removes a falsehood, and the two remaining wrong answers now have a cause in named code and not in bad data.
+- Failure 106: the first version read the page layout, not the clause. It worked only because Star's PDF puts "a." and "b." on their own lines, and its good behaviour on HDFC rested on a missing space. Fixed so layout does not matter, with a limit that reads nothing from long lists.
 
-### M45 - Every text rule, run against the same words set differently
+### M45: Every text rule, run against the same words set differently
 After Failure 106, a mechanical check of all fifty-odd hand-written text patterns: run each on real clauses and questions, and again with only the typesetting changed. Five faults that reach the running program, three latent ones, all invisible on the synthetic policy because it has no typesetting to vary. Read it for the technique, which needs no expected answers.
-- **What it found** - a correct quotation rejected across a line-end hyphen (12 places), a curly apostrophe hiding "don't", cross-references and reading grades miscounted on wrapped phrases and ligatures.
-- **Failure 107: the fix uncovered a true exception, and printing it broke an answer** - HDFC's Geography exception had been dropped by a line break; restoring it turned a paid dengue claim into a refusal on an unrelated clause, so it stays dropped, by decision.
-- **Concept 60: test a rule against the same input in a different form** - metamorphic testing, and why it only works on real inputs. Also introduces NFKC.
+- What it found. A correct quotation rejected across a line-end hyphen (12 places), a curly apostrophe hiding "don't", cross-references and reading grades miscounted on wrapped phrases and ligatures.
+- Failure 107: the fix uncovered a true exception, and printing it broke an answer. HDFC's Geography exception had been dropped by a line break; restoring it turned a paid dengue claim into a refusal on an unrelated clause, so it stays dropped, by decision.
+- Concept 60: test a rule against the same input in a different form. Metamorphic testing, and why it only works on real inputs. Also introduces NFKC.
 
-### M46 - Three loose ends from the format audit
+### M46: Three loose ends from the format audit
 Three small faults M45 listed and left, each fixed in isolation and then tested together against the real model. Read Failure 108 if you read one thing: a test that passed alone and failed in the suite.
-- **A word broken at a line end was two words to the reading grade** - 19 clauses; grades nudged, one neighbouring swap in the ranking.
-- **An abbreviation ended a sentence in the exception check** - "Rs. 10,000" cut a sentence and could drop a true exception. 0 of 102 stored exceptions change. Introduces **Concept 61: negative lookbehind**.
-- **Failure 108: a timing test that failed only after other tests had run** - a remembered Ollama version expiring between two calls; fixed in the test, confirmed 11 of 11 on the real model.
+- A word broken at a line end was two words to the reading grade. 19 clauses; grades nudged, one neighbouring swap in the ranking.
+- An abbreviation ended a sentence in the exception check. "Rs. 10,000" cut a sentence and could drop a true exception. 0 of 102 stored exceptions change. Introduces Concept 61: negative lookbehind.
+- Failure 108: a timing test that failed only after other tests had run. A remembered Ollama version expiring between two calls; fixed in the test, confirmed 11 of 11 on the real model.
 
-### M47 - The space after a list number, and what losing it broke
+### M47: The space after a list number, and what losing it broke
 A fourth insurer's PDF exposed a fault in reading the text: the space after "1." was dropped, so numbered clauses merged into the one above (355 places in HDFC). Fixing it broke HDFC answers three different ways, each traced and fixed. Read it for a correct fix that uncovers further faults one after another, and for an answer that was "right" only because the score ignored its reason. The question sets are not yet re-run on the final code; the entry lists what is missing.
-- **Failure 109: the space after "1." was thrown away** - blank PDF spans dropped with the styling; plus a bold number is not a bold clause (HDFC's definition lists), and why the same rule could not be used for Star.
-- **Failure 110: the size cap cut a clause in mid-sentence** - the tail of a definition read as a 36-month wait on every claim; cuts now prefer a sentence end.
-- **Failure 111: an optional cover's choices read as always applying** - a list restarting at 1 inside "2.12" now stays in it.
-- **Failure 112: the right refusal for the wrong reason** - diagnosed from stored answers without the model; the consistency check now also questions a refusal that cites no window clause. Introduces **Concept 62: a right verdict for a wrong reason is a wrong answer**.
+- Failure 109: the space after "1." was thrown away. Blank PDF spans dropped with the styling; plus a bold number is not a bold clause (HDFC's definition lists), and why the same rule could not be used for Star.
+- Failure 110: the size cap cut a clause in mid-sentence. The tail of a definition read as a 36-month wait on every claim; cuts now prefer a sentence end.
+- Failure 111: an optional cover's choices read as always applying. A list restarting at 1 inside "2.12" now stays in it.
+- Failure 112: the right refusal for the wrong reason. Diagnosed from stored answers without the model; the consistency check now also questions a refusal that cites no window clause. Introduces Concept 62: a right verdict for a wrong reason is a wrong answer.
 
-### M48 - A fourth insurer's clause structure, checked against the other four after every change
+### M48: A fourth insurer's clause structure, checked against the other four after every change
 ICICI Lombard's wording, split into clauses with no model involved: from 92 clauses (median 2,934 characters) to 250 (median 466). Every edit was checked against a saved copy of all five policies' clauses, which reshaped three fixes. Read it for the snapshot technique and for how a loose rule is tightened one counter-example at a time.
-- **Concept 63: a snapshot of the whole output, compared after every change** - characterization testing for code whose risk is the cases nobody thought of.
-- **Failure 113: Niva's standard waiting periods were filed under "Optional Benefit"** - found by checking the code's marked shortcuts against real PDFs; fixed for ICICI, still blocked on Niva by a page stored bottom-first.
-- **Failure 114: "7.5 Lakhs" was a clause number** - plus two slips of mine: a shell that turned `\b` into a backspace, and a commit made over a failing test.
+- Concept 63: a snapshot of the whole output, compared after every change. Characterization testing for code whose risk is the cases nobody thought of.
+- Failure 113: Niva's standard waiting periods were filed under "Optional Benefit". Found by checking the code's marked shortcuts against real PDFs; fixed for ICICI, still blocked on Niva by a page stored bottom-first.
+- Failure 114: "7.5 Lakhs" was a clause number. Plus two slips of mine: a shell that turned `\b` into a backspace, and a commit made over a failing test.
 - Page numbers under a tall letterhead; unnumbered definitions; and why ICICI's size is a design decision.
 
-### M49 - The model reads every clause before anything is cut to fit
+### M49: The model reads every clause before anything is cut to fit
 For a policy too long for the context window, clauses used to be cut by type and impact before the model's picking step read them: HDFC lost 33 on every question. Now the pick reads everything in small groups and only its result is fitted, never dropping a clause the code's calculations name. Read it for the four options weighed and for a change whose reach was worked out from the code because it could not yet be measured.
 
-### M47–M49 measured - three branches on the real model
+### M47-M49 measured: three branches on the real model
 The first model runs of M47, M48 and M49. HDFC: main 14/14, M47 13/14, M48 12/14, M49 13/14 with every answer unanimous; M49 costs about 50% more time per question. Star: M47 17/22 against main's 18/22, the one difference being chance. Read it for how a regression was traced to a single clause.
-- **Failure 115: M47 broke the hernia question, and M49 mended it** - the deciding clause and the arithmetic were both right; the cause was narrowed to which clauses were shown, but not traced.
-- **Failure 116: a section's opening sentence, typed as a waiting period, made the model refuse typhoid** - HDFC's "the Company shall not make payment ... all the Waiting Periods listed below shall be applicable", picked by M49, turned a covered claim into a refusal. Not fixed yet; three candidate fixes listed.
-- **Concept 64: change one input, in both directions** - ablation: remove the suspect from the failing setup and add it to the passing one; both must agree.
+- Failure 115: M47 broke the hernia question, and M49 mended it. The deciding clause and the arithmetic were both right; the cause was narrowed to which clauses were shown, but not traced.
+- Failure 116: a section's opening sentence, typed as a waiting period, made the model refuse typhoid. HDFC's "the Company shall not make payment ... all the Waiting Periods listed below shall be applicable", picked by M49, turned a covered claim into a refusal. Not fixed yet; three candidate fixes listed.
+- Concept 64: change one input, in both directions. Ablation: remove the suspect from the failing setup and add it to the passing one; both must agree.
 
-### M50 - A heading is shown on the clause map, and never to the model answering a question
+### M50: A heading is shown on the clause map, and never to the model answering a question
 Group headings like HDFC's "1. Waiting Periods" (with its "shall not make payment for any claim" lead-in) are found by structure, marked, kept on the clause map, and left out of the answering step. HDFC 13/14 → 14/14. Read it for how a rule is tightened against every policy at once, and for a fix that failed because it moved the problem instead of removing it.
-- **Failure 117: the sentence moved into the first item, and refused five covered claims** - merged into Excl01, the blanket sentence reached nearly every prompt; HDFC fell to 9/14.
+- Failure 117: the sentence moved into the first item, and refused five covered claims. Merged into Excl01, the blanket sentence reached nearly every prompt; HDFC fell to 9/14.
 - Why the skip comes after the citation ids are counted.
 
-### M51 - Asking the model again about the pre-existing-disease wait: two attempts, both reverted
+### M51: Asking the model again about the pre-existing-disease wait: two attempts, both reverted
 No code from this entry is in the repository. A check that re-asked a refusal resting only on the pre-existing wait, and then a rule reading "for years" / "since childhood" as pre-existing so the check would only reach real unknowns. Read it for how to find which cases a new check reaches before using the model, and for a rule that passed every eval question and failed on the first one written against it.
-- **Failure 118: the check reached two right answers, and broke both** - "diabetes for years" paid 5 of 5; asthma refused without its reason.
-- **Failure 119: a question nobody had written** - an old illness mentioned, a broken arm claimed: refused 3 of 3 under the diabetes rule. The facts hold one condition per question, so the rule cannot be narrowed without a schema change.
+- Failure 118: the check reached two right answers, and broke both. "diabetes for years" paid 5 of 5; asthma refused without its reason.
+- Failure 119: a question nobody had written. An old illness mentioned, a broken arm claimed: refused 3 of 3 under the diabetes rule. The facts hold one condition per question, so the rule cannot be narrowed without a schema change.
 
-### M53 - The claim, apart from the person's history (not merged)
+### M53: The claim, apart from the person's history (not merged)
 The facts held one `condition` per question, so "diabetes for years ... admitted for a broken arm" was judged as a diabetes claim. Now `claimed_condition` and `other_conditions` are separate slots, and only the claim is dated. Read it for how a schema slot forces a hidden choice on the model, and for a code rule that was dropped after a review found it refusing payable claims.
-- **Concept 65: a fact belongs to the thing it describes** - if one sentence can hold two answers to a field, the field is attached to the wrong thing.
+- Concept 65: a fact belongs to the thing it describes. If one sentence can hold two answers to a field, the field is attached to the wrong thing.
 - Settling "pre-existing: yes" from the person's words: built, reviewed, dropped ("kidney stones" and "kidney infection" share a word; a father's diabetes is not yours).
 
-### M55 - Closing the other ways the history reached the model (not merged)
+### M55: Closing the other ways the history reached the model (not merged)
 The facts were right after M53, and the broken arm was still refused: the history reached the model through the facts `notes` and the clause-pick prompt. Both are now closed, and case 41 went from 0 of 5 to 4 of 5 covered. Read it for how the notes were audited from the cache without the model, and for why dropping all notes was rejected (M10 measured it net negative).
-- **Failure 120: telling the model "this wait does not concern this claim" made it cite the wait** - a third branch (M54) settled "not pre-existing" in code and turned 4 of 5 into 0 of 5; not merged, cause not established.
-- **Failure 121: a new section in the facts prompt changed fields it never mentioned** - fixed 3 history questions, broke 2 others and three policy durations; not merged. Ends with the design to try next.
+- Failure 120: telling the model "this wait does not concern this claim" made it cite the wait. A third branch (M54) settled "not pre-existing" in code and turned 4 of 5 into 0 of 5; not merged, cause not established.
+- Failure 121: a new section in the facts prompt changed fields it never mentioned. Fixed 3 history questions, broke 2 others and three policy durations; not merged. Ends with the design to try next.
 
-### Final run - the shipped code, measured
+### Final run: the shipped code, measured
 101 of 120 on M50's code. Read it for four answers that broke during M47-M50 without anyone noticing, and why a change measured only on the sets it targets is not measured.
-
----
 
 ## Related documents
 
-- **[../evals/REPORT.md](../evals/REPORT.md)** - the consolidated results, stamped with the model, prompt version, decoding settings and commit that produced them. Regenerate with `python evals/run_all.py`.
-- **[../evals/](../evals/)** — the evaluation harness. Model and prompt changes in this project are justified by measurements, not by impressions.
-
----
+- [../evals/REPORT.md](../evals/REPORT.md) has the consolidated results, stamped with the model, prompt version, decoding settings and commit that produced them. Regenerate with `python evals/run_all.py`.
+- [../evals/](../evals/) is the evaluation harness. Model and prompt changes in this project are justified by measurements, not by impressions.
 
 ## Reading the code alongside the log
 
@@ -493,6 +485,6 @@ The pipeline runs in stages, and each file's module docstring explains why that 
 | 4. Score | `api/app/pipeline/score.py` | No |
 | 5. Scenario | `api/app/pipeline/scenario.py` | Yes |
 
-The governing principle: **deterministic wherever possible, a model only where language understanding is genuinely required.** That is what makes a small local model reliable enough to build on.
+The governing principle: deterministic wherever possible, a model only where language understanding is genuinely required. That is what makes a small local model reliable enough to build on.
 
 Supporting modules: `app/llm/client.py` (constrained JSON calls), `app/llm/cache.py`, `app/llm/prompts.py`, `app/taxonomy.py` (the shared vocabulary), `app/models.py` (database tables).

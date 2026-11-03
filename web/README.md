@@ -1,4 +1,4 @@
-# web — Policy Reader interface
+# web: Policy Reader interface
 
 Vite + React + TypeScript + Tailwind 4. Talks to the FastAPI backend in `../api`.
 
@@ -28,8 +28,8 @@ Two rules are easy to break by accident:
    class); everything the app says is set in Instrument Sans. The typeface is
    what tells a reader which voice is speaking, so the two must never be mixed.
 2. **Severity is never carried by colour alone.** Every severity indicator pairs
-   its hue with a numeral and a text label — including at narrow widths, where
-   the impact rail is hidden and the score moves inline.
+   its hue with a numeral and a text label. This holds at narrow widths too,
+   where the impact rail is hidden and the score moves inline.
 
 ## Layout
 
