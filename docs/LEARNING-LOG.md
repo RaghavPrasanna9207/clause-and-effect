@@ -5502,14 +5502,14 @@ character (`\x07`) between the number and the word. The segmenter's evidence
 that `13.` is a clause number rather than a quantity is that a capital letter
 follows it, and the first character after the whitespace was `\x07`. Control
 characters are now replaced with spaces at extraction. The test builds a PDF
-containing `\x07` and was checked to fail on the old code — worth checking,
+containing `\x07` and was checked to fail on the old code. That check matters
 because had PyMuPDF stripped the character when writing the test PDF, the test
 would have passed without testing anything.
 
 ## Step 3: what is a clause number
 
 With order and furniture fixed, listing Star's segments one per line showed
-exclusions 1-9 and conditions 2-9 were still missing — buried inside
+exclusions 1-9 and conditions 2-9 were still missing, buried inside
 3,000-character pieces cut by the size cap.
 
 ### Numbers on a line of their own
@@ -5528,7 +5528,7 @@ clause (`1.2.` | `Home Health Care`), which is most of why 39 of its 70 segments
 had been cut by the size cap.
 
 A line holding only a marker is now read together with the next line, if that
-line sits on the same row and to its right — the way a reader sees it:
+line sits on the same row and to its right, the way a reader sees it:
 
 ```python
 # api/app/pipeline/segment.py
@@ -5557,8 +5557,8 @@ Same position, same form, both "a number, then a capital". Indentation cannot
 separate them (both at x=330), and neither can sequence (3 follows 2 in both
 the list and the exclusions). Listing every numbered line on Star found one
 signal that did: every real clause number was bold, and every list item was
-plain — exclusions 1-23, conditions 1-28, coverage 1-9 bold; `i.`–`xvi.`,
-`A.`–`L.`, `01.`–`20.`, and `2255.` plain.
+plain: exclusions 1-23, conditions 1-28, coverage 1-9 bold; `i.` to `xvi.`,
+`A.` to `L.`, `01.` to `20.`, and `2255.` plain.
 
 ## Concept 39: evidence relative to the document
 
@@ -5617,8 +5617,8 @@ a number ("24 hours", table rows). And the threshold picked before measuring,
 0.25, landed exactly on Star and one hundredth above Niva Bupa. Three similar
 documents would have been split by rounding.
 
-The fixed threshold sits in the widest gap in the data — between 0.00 and 0.24
-— at 0.10, and its comment now quotes the table rather than an impression. The
+The fixed threshold sits in the widest gap in the data (between 0.00 and 0.24),
+at 0.10, and its comment now quotes the table rather than an impression. The
 lesson is Failure 11's again: "to be safe" is not a number, and neither is "about
 62%". A number in a comment is a claim, and it was checked only because
 the code was about to depend on it.
@@ -5627,7 +5627,7 @@ the code was about to depend on it.
 
 Two policies still produced clauses like `24 Months waiting period`, `1 year
 Tenure` and, from a table header, `75 Lakhs`. The rule allowed a bare integer
-(no dot) as weak evidence, confirmed by bold — and on real wordings sub-headings
+(no dot) as weak evidence, confirmed by bold, and on real wordings sub-headings
 and table headers are bold. Across all six documents measured, no clause is
 numbered with a bare integer: real ones use `3.`, `1.2.` or `4.15`, the
 synthetic one `1.1`. So a bare integer is no longer numbering at all. An existing
@@ -5637,7 +5637,7 @@ changed deliberately to `is None`, with the reason recorded in it.
 One cost, measured rather than assumed: Star's `1 - PREAMBLE` and
 `2 - OPERATIVE CLAUSE` were clauses numbered 1 and 2; they are now part of the
 front-matter segment. The operative clause grants cover, so it is still shown to
-the scenario step — under the id `c0` instead of `2`.
+the scenario step, under the id `c0` instead of `2`.
 
 ### Section words, matched as whole words
 
@@ -5645,7 +5645,7 @@ Star's definitions were filed under the section `STAR HEALTH AND ALLIED
 INSURANCE COMPANY LIMITED`, and a table of non-payable items under `AIR
 CONDITIONER CHARGES`. The fallback for unstyled section headings looks for words
 like "limit" and "condition" in an all-capitals line, and matched them as
-substrings — `LIMIT` in `LIMITED`, `CONDITION` in `CONDITIONER`. They now match
+substrings: `LIMIT` in `LIMITED`, `CONDITION` in `CONDITIONER`. They now match
 whole words, optionally plural.
 
 ### A test expectation that was wrong
@@ -5677,7 +5677,7 @@ The synthetic policies' segments are identical to M15's, field for field.
 
 **Still wrong on Star, and left:** the definitions (about 16,000 characters)
 have no numbers, only a bold `Term:` at the start of each, and are still cut at
-the size cap into six pieces — and filed under the company letterhead, a
+the size cap into six pieces, and filed under the company letterhead, a
 one-off 15-point line that the PDF's content stream places after page 2's
 columns. The claim-settlement condition runs past the cap. The annexure tables
 are cut at the cap. None of these decides a claim question on its own, and a
@@ -5689,7 +5689,7 @@ are cut at the cap. None of these decides a claim question on its own, and a
 
 The window was 8,192 tokens because of Failure 11: at 16,384, on Ollama 0.33,
 the runtime held 5.46GB and the operating system killed an eval for memory
-pressure. That was a measurement — of one runtime version, on one day, with
+pressure. That was a measurement of one runtime version, on one day, with
 whatever else the machine was running. By M16 the runtime was Ollama 0.34, and
 the requirement had changed: the smallest real wording is about four times
 what 8,192 can hold.
@@ -5708,7 +5708,7 @@ reading Ollama's own placement report:
 
 Free system RAM did not change between sizes: the KV cache lives on the GPU.
 32,768 is qwen2.5's maximum, but it no longer fits in 8GB of VRAM, spills onto
-the CPU, and slows *every* call by a fifth — including the per-clause analyses
+the CPU, and slows *every* call by a fifth, including the per-clause analyses
 that need no long context. 28,672 is the largest window measured to run
 entirely on the GPU, and it is the new setting.
 
@@ -5724,7 +5724,7 @@ num_ctx 24576: prompt tokens 12290
 ```
 
 Half the window plus two, both times. Plain policy text tokenises more densely
-than 4.3, so both prompts had overflowed — and what Ollama did with the overflow
+than 4.3, so both prompts had overflowed, and what Ollama did with the overflow
 was not what M15's check assumed. Stepping one prompt across an 8,192-token
 window:
 
@@ -5754,23 +5754,23 @@ Ollama.
 The count alone cannot tell "short" from "cut in half". The first replacement
 used characters per token: policy prompts measured 4.06-4.3, a prompt cut to half
 reports about twice that, so anything over 6.0 was called truncated. Its own
-live test then failed — a repeated English sentence measured 5.47 characters
-per token, uncomfortably close to 6.0 — and measuring more kinds of text
+live test then failed (a repeated English sentence measured 5.47 characters
+per token, uncomfortably close to 6.0), and measuring more kinds of text
 disproved the rule outright:
 
 | Text | Characters | Reported tokens | Chars/token | Actually |
 |---|---:|---:|---:|---|
 | policy | 20,000 | 4,710 | 4.25 | intact |
 | prose | 20,000 | 3,666 | 5.46 | intact |
-| long words | 20,000 | 2,529 | 7.91 | intact — the ratio rule refuses it |
-| numbers | 20,000 | 4,098 | 4.88 | truncated — the ratio rule passes it |
+| long words | 20,000 | 2,529 | 7.91 | intact; the ratio rule refuses it |
+| numbers | 20,000 | 4,098 | 4.88 | truncated; the ratio rule passes it |
 
 A column of numbers tokenises at about two characters per token, so 20,000 of
 them overflow, and halved they report a ratio inside the range of intact policy
 text. The ratio's "gap" existed for one kind of text.
 
-What held in every case — policy text, prose, numbers, a real system-plus-user
-scenario prompt, windows of 8,192, 16,384 and 24,576 — was the exact count:
+What held in every case (policy text, prose, numbers, a real system-plus-user
+scenario prompt, windows of 8,192, 16,384 and 24,576) was the exact count:
 
 ```python
 # api/app/llm/client.py
@@ -5789,8 +5789,8 @@ Three decisions in that:
   coincidence have exactly that many tokens; the cost is a loud error on that
   one prompt, never a silent wrong answer.
 - It raises. A truncated scenario prompt means an answer reasoned over part
-  of the policy with nothing to say so. Retrying cannot help — the same prompt
-  truncates the same way — and because the error is raised before the cache is
+  of the policy with nothing to say so. Retrying cannot help (the same prompt
+  truncates the same way), and because the error is raised before the cache is
   written, a truncated answer is never stored.
 - A test re-measures it against the live server. The signature is a
   behaviour of Ollama 0.34, not a law. The unit test encodes the measurement; a
@@ -5805,7 +5805,7 @@ With the window measured, the options for "the policy does not fit":
 
 | Option | Rejected because |
 |---|---|
-| A window of 28,672 | — chosen |
+| A window of 28,672 | chosen |
 | 32,768 | spills 8% onto the CPU; every call a fifth slower |
 | A first pass where the model picks relevant clauses from a summary list | an extra model step whose misses are silent, solving a problem the window removes for this policy |
 | Keyword search (BM25) | "gallstones" does not match "Calculi in … Gall Bladder"; the design rules it out |
@@ -5814,7 +5814,7 @@ With the window measured, the options for "the policy does not fit":
 Star's clauses are 68,598 characters. At 4.25 characters per token that is
 about 16,000 tokens; with per-clause headers, the system prompt, the question
 and the answer ceiling, about 22,000. It fits. HDFC ERGO's 129,000 characters
-do not, so the shortlist remains — as a fallback that has to fail better.
+do not, so the shortlist remains as a fallback that has to fail better.
 
 ### The shortlist, rebuilt
 
@@ -5849,14 +5849,14 @@ The shortlist returned its selection sorted by clause number, documented as
 "document order, because a person reading the answer expects clause 3.2
 discussed before 6.1". On the synthetic policy the two are the same. On Star,
 whose numbering restarts in every section, sorting by number would present
-coverage 1, exclusion 1 and condition 1 side by side — and put every unnumbered
+coverage 1, exclusion 1 and condition 1 side by side, and put every unnumbered
 clause at the end. This was found by reading the code while changing it, before
 any run could show it.
 
 The selection now keeps the order the clauses arrive in. That moved the
 question to the caller, and the scenario endpoint turned out to have none: it
 read clauses from a query with no `ORDER BY` (under a docstring saying "ordered
-by impact"). Order there decides two things — the order the shortlist keeps,
+by impact"). Order there decides two things: the order the shortlist keeps,
 and which repeat of a number becomes `10#2`, which the eval must assign
 identically (Failure 50). The endpoint now sorts by `order_idx` explicitly.
 
@@ -5879,8 +5879,8 @@ if maximum and maximum < limit:
     limit = maximum
 ```
 
-The computed line shows its working — "2% of 3 lakh is 6,000 rupees per day,
-above the 5,000 rupees maximum, so the limit is 5,000 rupees" — rather than a
+The computed line shows its working ("2% of 3 lakh is 6,000 rupees per day,
+above the 5,000 rupees maximum, so the limit is 5,000 rupees") rather than a
 figure the clause never prints, which the model might otherwise quote as policy
 text (Failure 38). With no maximum the line is word for word what it was.
 
@@ -5896,7 +5896,7 @@ measures recall of the example, not reading.
 
 M15's ten Star questions had verdicts and no `must_cite`, because the clause ids
 were then segmentation artefacts. They are now the policy's own numbers, so each
-case's `must_cite` was filled in — mechanically, from the reason already written
+case's `must_cite` was filled in mechanically, from the reason already written
 in the case before any run: the hernia cases name exclusion 2 (`2#2`), the
 caesarean the maternity exclusion (`18`), Dubai the overseas exclusion (`22`),
 and so on.
@@ -5905,7 +5905,7 @@ One deliberate omission: no case requires the 5% co-payment, though every
 payable claim on this policy is conditional because of it. M15 found that clause
 carrying several right verdicts for wrong reasons; requiring it would reward the
 shortcut the key exists to catch. And one known strictness: the room-rent case
-requires coverage 1, while the table of benefits repeats the same limit — an
+requires coverage 1, while the table of benefits repeats the same limit, so an
 answer citing only the table has a right reason this key does not accept.
 
 ## Step 6: what the long window cost the machine
@@ -5934,7 +5934,7 @@ token, every layer computes a *key* (what this token offers to later tokens) and
 a *value* (what it passes on when a later token attends to it). Generating the
 next token means comparing against every earlier key, so rather than recompute
 them the runtime stores them. For qwen2.5-7B: 28 layers, each storing 4 key
-heads and 4 value heads of 128 numbers — 1,024 numbers per layer, 28,672 per
+heads and 4 value heads of 128 numbers: 1,024 numbers per layer, 28,672 per
 token, at 2 bytes each in 16-bit floating point (`f16`): 56 KB per token.
 Times 28,672 slots is 1,568 MiB, exactly the logged figure.
 
@@ -5950,7 +5950,7 @@ of every token against every other token; that is why the scratch area is only
 160 MiB at a 28,672-token window.
 
 **One figure is not explained.** The runner process was measured once holding
-about 14 GB of committed system memory — far more than the ~6 GB these lines add
+about 14 GB of committed system memory, far more than the ~6 GB these lines add
 up to. The log also records `disabling mmap for llama-server load by default ...
 reason=windows_cuda`: on this platform the weights are read into memory rather
 than mapped from the file. Whether that accounts for the gap was not measured.
@@ -6016,7 +6016,7 @@ system memory, the server log for the cache):
 
 | num_ctx | KV cache | On GPU | Runner private memory |
 |---:|---:|---|---:|
-| 8,192 | — | 4.4 GB, 100% | 5,531 MB |
+| 8,192 | n/a | 4.4 GB, 100% | 5,531 MB |
 | 28,672 | 833 MiB (f16: 1,568) | 5.0 GB, 100% | 6,176 MB |
 | 32,768 | 952 MiB (f16: 1,792) | 5.2 GB, 100% | 6,302 MB |
 
@@ -6040,7 +6040,7 @@ without anyone remembering to clear anything.
 The KV cache precision breaks it. It shapes the answer, but it is set on the
 server and never sent with a request, so it is not in `options`. Switched to
 q8_0 without a change to the key, every eval would have replayed the answers
-stored at f16 and reported them as q8_0 results — a comparison of two identical
+stored at f16 and reported them as q8_0 results, a comparison of two identical
 sets of bytes.
 
 The setting is now mirrored in `api/app/config.py`, read from the same
@@ -6274,8 +6274,8 @@ per synthetic question:
 |---|---|---|---|
 | Star right verdicts | 8/10 | 7/10 | 7/10 |
 | Star citing the deciding clause | 1/10 | 2/10 | 2/10 |
-| Synthetic, main 40 | 34/40 | — | 34/40 |
-| Synthetic held-out 1 / 2 | 11/16, 11/13 | — | 10/16, 12/13 |
+| Synthetic, main 40 | 34/40 | n/a | 34/40 |
+| Synthetic held-out 1 / 2 | 11/16, 11/13 | n/a | 10/16, 12/13 |
 
 The first wording appended a qualifier to the pre-existing line: "...still
 applies and blocks treatment covered by THIS clause. It concerns only an illness
@@ -6524,8 +6524,8 @@ its answer key requires. Star's clause 1 and its benefits table, and the
 synthetic 5.1, all say "per day" and keep their caps.
 
 The lesson is the one M15 opened with, from the other side: a second document
-does not only expose new faults, it exposes old ones the first document was
-too kind to show.
+exposes old faults the first document was too kind to show, as well as new
+ones.
 
 ### Failure 63: two waiting periods, one number
 
@@ -7027,13 +7027,13 @@ found the deciding clause in 7 of 10.
 So a context window has two limits, and only one of them is printed in the
 model card. The second has to be measured on the shape of your own prompt, and
 the measurement is cheap: ask the model to do a small, checkable part of the
-task at different prompt lengths - here, name the clauses that matter - and
+task at different prompt lengths (here, name the clauses that matter) and
 compare against the answer key you already have.
 
-What this does NOT license is retrieval. Nothing here is ranked, embedded or
+What this does *not* license is retrieval. Nothing here is ranked, embedded or
 searched, and no clause is dropped before a model has read it: every clause is
 read, in a group, by the same model that answers. The difference between that
-and retrieval is who decides - a reader, or a similarity score - and it is the
+and retrieval is who decides (a reader, or a similarity score), and it is the
 difference between a clause left out because it uses unusual words and one left
 out because the reader judged it irrelevant.
 
@@ -7041,7 +7041,7 @@ out because the reader judged it irrelevant.
 
 ### What pass 2 is shown
 
-The clauses the model picked, plus every clause code already names - and the
+The clauses the model picked, plus every clause code already names. The
 second half is not optional:
 
 ```python
@@ -7061,7 +7061,7 @@ The computed blocks say "clause 2#2: requires 24 months or 36 months…". If a
 pick could drop 2#2, that line would point at a clause the model cannot read or
 cite, and the bar it describes would go unanswered. The waiting periods,
 reductions and windows are still computed over every clause, before any
-picking: what the model picks decides what it READS, never what is checked.
+picking: what the model picks decides what it *reads*, never what is checked.
 
 A policy short enough to read whole is read whole:
 
@@ -7093,14 +7093,14 @@ about the right ones:
   "Since your situation falls under the exception, the claim is covered in
   full." The exception is for an ectopic pregnancy.
 - gallstones, no dates: "If the waiting period has been served, the claim
-  will be covered… If it has not, the claim will be refused" - the definition
-  of `insufficient_information` - and answers `conditional`.
+  will be covered… If it has not, the claim will be refused" (the definition
+  of `insufficient_information`) and answers `conditional`.
 
 ### Failure 67: a contradiction the check could not see
 
 **Setup.** `find_contradictions` compares an answer with what Python computed,
 and one of its rules is that a claim which is paid less than in full is
-`conditional`, never `covered`. It fired only when the answer CITED the
+`conditional`, never `covered`. It fired only when the answer *cited* the
 reduction as reducing:
 
 ```python
@@ -7115,7 +7115,7 @@ the caesarean question it did not fire at all: that answer cited only the
 maternity exclusion, so no cited clause matched a computed reduction, though
 the policy takes 5% from every claim it pays.
 
-**Why.** The contradiction is between the verdict and the ARITHMETIC, not
+**Why.** The contradiction is between the verdict and the *arithmetic*, not
 between the verdict and the citation. A policy with a co-payment on every claim
 cannot pay one in full, whatever the answer happens to cite.
 
@@ -7143,9 +7143,9 @@ published:
 
 This is a departure from `find_contradictions`' own rule that code never
 changes a verdict, and the reason it is allowed here is that nothing about the
-claim is being decided: "covered" states that the claim is paid IN FULL, and
-the arithmetic - a percentage the policy takes from every claim it pays, or a
-room rate over its cap - says it is not. The citations are left alone, because
+claim is being decided: "covered" states that the claim is paid *in full*, and
+the arithmetic (a percentage the policy takes from every claim it pays, or a
+room rate over its cap) says it is not. The citations are left alone, because
 which clause decides the case is the model's call and not arithmetic. It is the
 safe direction, like the downgrade for an answer with no citations: it takes
 away a promise of payment in full that no calculation supports.
@@ -7160,7 +7160,7 @@ away a promise of payment in full that no calculation supports.
 | Synthetic held-out 1 / 2 (one sample) | 10/16, 12/13 | 9/16, 11/13 |
 
 The verdict score has not moved all milestone. What has moved is what the
-answers are ABOUT: seven questions of ten are now decided by the clause the
+answers are *about*: seven questions of ten are now decided by the clause the
 answer key names, against two before. For an app whose promise is to show a
 person which clause decides their claim, that is the number that was failing.
 (Step 13 measures it again the next day, and gets 5 of 10.)
@@ -7183,7 +7183,7 @@ this milestone did not touch.
   the grouping, the empty pick, what code always shows, and the correction.
 - Predict before reading the code: a policy of 30 clauses, each about 250
   tokens, is asked one question. How many model calls does the scenario step
-  make before it answers? (One per group of about 3,000 tokens - so three - plus
+  make before it answers? (One per group of about 3,000 tokens, so three, plus
   the facts call and the answer.)
 
 ## Step 13: the closing measurement
@@ -7216,8 +7216,8 @@ KV cache:
 | Synthetic main set (40) | 38/40 | 33/40 | 34/40 |
 | Held-out batch 1 (16) | 13/16 | 13/16 | 10/16 |
 | Held-out batch 2 (13) | 11/13 | 12/13 | 12/13 |
-| Star, right verdicts | — | 8/10 | 7/10 |
-| Star, citing the deciding clause | — | 1/10 | 5/10 |
+| Star, right verdicts | n/a | 8/10 | 7/10 |
+| Star, citing the deciding clause | n/a | 1/10 | 5/10 |
 | Detection integrity, every sample | 1.000 | 1.000 | 1.000 |
 
 **Star.** Seven right verdicts, as in Step 12's final measurement, with every
