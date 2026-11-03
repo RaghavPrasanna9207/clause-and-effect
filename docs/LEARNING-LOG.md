@@ -9626,7 +9626,7 @@ That pairing is the project's central grounding mechanism. Ollama enforces
 the enum while decoding, so a citation of a clause that is not in the prompt
 cannot be generated at all (see the entries on constrained decoding). But
 this only holds if the prompt and the enum are built from the same clause
-list. Build them from two lists and the guarantee quietly lapses.
+list. Build them from two lists and the guarantee silently lapses.
 
 Inside the app they were built together, in `reason()` in
 `api/app/pipeline/scenario.py`. Two problems sat around it:
@@ -9971,8 +9971,8 @@ the new code: `cosmetic-exclusion`, `no-preauth-cashless` and
 code, all three were right five times out of five. On the new code they
 were wrong four or five times out of five.
 
-**None of these cases mentions another policy, so the new line never
-appeared.** The structured facts extracted for them were identical between old
+None of these cases mentions another policy, so the new line never
+appeared. The structured facts extracted for them were identical between old
 and new code. One thing did differ: the free-text `notes` field.
 
 | Case | `notes` under the old prompt | `notes` under the new prompt |
@@ -10683,7 +10683,7 @@ def relied_on(citations, forbidden: set[str]) -> list[str]:
 do for a single case. What makes it acceptable here is the check made first:
 every stored answer, for all 78 questions, was replayed from the cache (no
 model time) and scored under both rules. Exactly one answer moved,
-`copay-unknown-inception-age`. A rule that had quietly forgiven other real
+`copay-unknown-inception-age`. A rule that had silently forgiven other real
 false citations would have shown up in that list. A test pins both sides: a
 `requires` citation of a forbidden clause is not counted, a `reduces` one is.
 
