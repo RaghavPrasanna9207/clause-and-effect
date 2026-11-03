@@ -3610,7 +3610,7 @@ Before any code existed, a script replayed every stored answer from the cache
 | Rule | Would catch | Of which already right |
 |---|---|---|
 | (a) a clause the arithmetic cleared, cited as refusing, delaying or reducing | `ped-waiting-served`, `room-rent-within-cap`, `ambulance-admissible` | `ambulance-admissible` (right verdict, but citing three satisfied waiting periods as "reduces", which is itself wrong) |
-| (b) one clause cited as refusing AND another as reducing, verdict not `not_covered` | `senior-but-excluded` | none |
+| (b) one clause cited as refusing and another as reducing, verdict not `not_covered` | `senior-but-excluded` | none |
 | notes claiming coverage the person never mentioned | `not-in-document` | none |
 
 The measurement changed a rule before it was written. Rule (b) was first framed
@@ -9596,7 +9596,7 @@ cd api
 ```
 
 **Predict before you look:** `duration_days({"expense_timing_value": 0,
-"expense_timing_unit": "days"}, "expense_timing")` — is the answer `0` or
+"expense_timing_unit": "days"}, "expense_timing")`: is the answer `0` or
 `None`, and why does the difference matter for a waiting period?
 
 <details>
@@ -12745,8 +12745,8 @@ single-prompt and analysis layers also failed, in the way Failure 24
 recorded: the first generation after a start differs from later ones.
 
 Earlier results of this check are not comparable (they measured other
-prompts), so this is the baseline from here on. What it says is not new, but
-it is now measured on the right thing: a single eval run cannot be trusted
+prompts), so this is the baseline from here on. Its finding is an old one,
+now measured on the right thing: a single eval run cannot be trusted
 to within a case or two, which is the reason every comparison in this
 project since M17 is a majority of three samples and counts only the cases
 whose requests actually changed.
