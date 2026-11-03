@@ -8265,7 +8265,7 @@ after:   [..., 'STANDARD DEFINITIONS', 'SPECIFIC DEFINITIONS',
 Six headings recovered, one junk clause removed, and every clause now files under
 a more precise section than "5 - EXCLUSIONS". Star went from 80 segments to 79.
 
-**Niva's wording and all three synthetic policies changed by not one segment.**
+Niva's wording and all three synthetic policies changed by not one segment.
 That was the check that mattered: none of them is letter-spaced, so a correct fix
 had to leave them completely alone. It did.
 
