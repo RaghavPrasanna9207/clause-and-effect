@@ -1,4 +1,4 @@
-# Insurance Policy Clause Explainer
+# Clause & Effect
 
 Upload an Indian health insurance policy PDF. Find out what could get your claim denied before you file one.
 

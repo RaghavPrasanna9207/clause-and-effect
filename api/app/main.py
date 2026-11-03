@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Insurance Policy Clause Explainer",
+    title="Clause & Effect",
     description="Finds the clauses in your health policy that could get a claim denied.",
     version="0.1.0",
     lifespan=lifespan,

@@ -1,4 +1,4 @@
-# web: Policy Reader interface
+# web: Clause & Effect interface
 
 Vite + React + TypeScript + Tailwind 4. Talks to the FastAPI backend in `../api`.
 

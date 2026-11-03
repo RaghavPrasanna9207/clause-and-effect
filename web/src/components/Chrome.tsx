@@ -16,7 +16,7 @@ export function Masthead({ children }: { children?: React.ReactNode }) {
         <div>
           <Link to="/" className="group inline-block">
             <h1 className="font-display text-[34px] leading-none tracking-[-0.01em]">
-              Policy Reader
+              Clause &amp; Effect
             </h1>
           </Link>
           <p className="mt-1.5 max-w-[52ch] text-[13px] leading-snug text-muted">
