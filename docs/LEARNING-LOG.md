@@ -567,13 +567,13 @@ An HTTP surface over the pipeline: upload a PDF, watch it being processed, read 
 
 ## Concept 8: Why the upload returns 202, not 200
 
-Analysis takes about two minutes on a local model. An HTTP request cannot politely stay open that long — browsers, proxies and load balancers all time out — and even if it could, the user would be staring at a blank tab.
+Analysis takes about two minutes on a local model. An HTTP request cannot politely stay open that long (browsers, proxies and load balancers all time out), and even if it could, the user would be staring at a blank tab.
 
-So `POST /documents` returns **`202 Accepted`**, whose specific meaning is *"the work has been queued, not completed."* Its body deliberately contains no results. The client then polls `/status`.
+So `POST /documents` returns `202 Accepted`, whose specific meaning is *"the work has been queued, not completed."* Its body deliberately contains no results. The client then polls `/status`.
 
 The work runs in FastAPI's `BackgroundTasks`, which the plan chose over Celery or a job queue: this is a single-user local app, and a queue would be infrastructure with no reader.
 
-**Progress is weighted by time, not by stage count.** Ingest and segment finish in milliseconds; analysis is essentially all of the wall time. Giving each of four stages 25% would produce a bar that leaps to 50% instantly and then appears frozen for two minutes. Instead analysis owns 10%→95%, and the live run reports genuinely smooth movement:
+**Progress is weighted by time, not by stage count.** Ingest and segment finish in milliseconds; analysis is essentially all of the wall time. Giving each of four stages 25% would produce a bar that leaps to 50% instantly and then appears frozen for two minutes. Instead analysis owns 10%→95%, and the live run reports smooth movement:
 
 ```
 [10.0%] analyzing   Reading 40 clauses
@@ -585,7 +585,7 @@ The work runs in FastAPI's `BackgroundTasks`, which the plan chose over Celery o
 
 ### One detail that is easy to get wrong
 
-`_update()` in `api/app/pipeline/run.py` opens its **own short-lived session** for each status write, rather than reusing one session held across the whole run:
+`_update()` in `api/app/pipeline/run.py` opens its own short-lived session for each status write, rather than reusing one session held across the whole run:
 
 ```python
 def _update(doc_id: str, **fields) -> None:
@@ -594,15 +594,15 @@ def _update(doc_id: str, **fields) -> None:
         session.commit()
 ```
 
-The polling endpoint reads that row from a *different* connection, and it can only observe changes that have actually been **committed**. Held open in one long transaction, the writes would be invisible to the poller and the progress bar would sit at 0% until the very end.
+The polling endpoint reads that row from a *different* connection, and it can only observe changes that have been *committed*. Held open in one long transaction, the writes would be invisible to the poller and the progress bar would sit at 0% until the very end.
 
 ### Failing without a listener
 
-`process_document` never raises. It runs as a background task with nobody awaiting it, so an escaping exception would vanish into the event loop and leave the document reporting "analyzing" forever. Failures are written to the row instead, where the polling UI can surface them — verified by `test_a_corrupt_pdf_fails_the_document_not_the_server`.
+`process_document` never raises. It runs as a background task with nobody awaiting it, so an escaping exception would vanish into the event loop and leave the document reporting "analyzing" forever. Failures are written to the row instead, where the polling UI can surface them. `test_a_corrupt_pdf_fails_the_document_not_the_server` verifies this.
 
 ## Failure 7: the bug the test suite could not have caught
 
-All 57 tests passed. The API worked under `TestClient`. So as a last check I ran a **live uvicorn server** and drove it over real HTTP.
+All 57 tests passed. The API worked under `TestClient`. So as a last check I ran a live uvicorn server and drove it over real HTTP.
 
 ```
 POST /documents -> 202 in 0.23s  id=c04963489b6f
@@ -623,9 +623,9 @@ SQLModel.metadata.drop_all(engine)
 init_db()
 ```
 
-Every test runs against a schema built moments earlier from the current models. **They never run against a schema that has aged.** The tests were not merely failing to catch this bug — they were structurally incapable of it.
+Every test runs against a schema built moments earlier from the current models. They never run against a schema that has aged, so the tests were structurally incapable of catching this bug.
 
-> A test suite that rebuilds the world before every test is blind to every bug that only appears in a world which has been running for a while. Schema drift, stale caches, accumulated data, migrations — none of it is reachable from a fixture that starts by deleting everything.
+> A test suite that rebuilds the world before every test is blind to every bug that only appears in a world which has been running for a while. Schema drift, stale caches, accumulated data and migrations are all unreachable from a fixture that starts by deleting everything.
 
 **The fix, and what it deliberately does not do.** `check_schema()` in `api/app/db.py` now compares the live database's columns against the model metadata at startup and raises with the specifics:
 
@@ -639,9 +639,9 @@ The LLM cache is a separate file, so re-analysis will still be served from cache
 and take seconds.
 ```
 
-It **raises rather than dropping the tables itself.** There is no migration path in v1 — that was a deliberate scope decision — but silently discarding someone's uploaded policies is not this function's call to make. It reports exactly what is wrong and exactly how to fix it, and leaves the decision with the person who owns the data.
+It raises rather than dropping the tables itself. There is no migration path in v1 (a deliberate scope decision), but silently discarding someone's uploaded policies is not this function's call to make. It reports exactly what is wrong and exactly how to fix it, and leaves the decision with the person who owns the data.
 
-Note the last line of that message. Because the LLM cache lives in a *separate* SQLite file (a decision made back in M0 for a different reason), deleting the application database costs seconds rather than minutes — every model response is still cached. A small early decision paying off somewhere unrelated.
+Note the last line of that message. Because the LLM cache lives in a *separate* SQLite file (a decision made back in M0 for a different reason), deleting the application database costs seconds rather than minutes, because every model response is still cached.
 
 `test_schema_drift_is_detected` builds a deliberately stale database and asserts the error names both the missing column and the remedy.
 
@@ -651,16 +651,16 @@ Note the last line of that message. Because the LLM cache lives in a *separate* 
 
 | Kind | What it covers | Cost |
 |---|---|---|
-| **Fast** (18 tests) | Routing, filtering, sorting, validation, error handling — against a directly seeded database | ~3 seconds |
-| **End-to-end** (2 tests, marked `llm`) | One real upload through all four stages, on a 4-clause policy | ~23 seconds |
+| Fast (18 tests) | Routing, filtering, sorting, validation and error handling, against a directly seeded database | ~3 seconds |
+| End-to-end (2 tests, marked `llm`) | One real upload through all four stages, on a 4-clause policy | ~23 seconds |
 
-The seeded fixture inserts a finished document straight into the database. That is not a shortcut — it is the correct scope. A test asserting *"filtering by `clause_type=exclusion` returns only exclusions"* is a test about the API. Routing it through a language model would make it slow, non-deterministic, and liable to fail because the model's opinion of a clause changed.
+The seeded fixture inserts a finished document straight into the database. That is the correct scope for these tests. A test asserting *"filtering by `clause_type=exclusion` returns only exclusions"* is a test about the API. Routing it through a language model would make it slow, non-deterministic, and liable to fail because the model's opinion of a clause changed.
 
-The end-to-end tests use a purpose-built **4-clause** policy rather than the 39-clause golden set, because analysis costs roughly three seconds per clause and a two-minute test is a test people stop running.
+The end-to-end tests use a purpose-built 4-clause policy rather than the 39-clause golden set, because analysis costs roughly three seconds per clause and a two-minute test is a test people stop running.
 
 > **Tests check that it works. Evals check how well.** Keeping those separate is what lets both be honest: the tests stay fast and deterministic, and the eval is free to be slow and to report an uncomfortable number.
 
-The end-to-end test also re-verifies the **M1 offset invariant through the entire stack** — for every clause returned over HTTP, `raw_text[char_start:char_end] == source_text`. The grounding guarantee is not something the pipeline has internally and then loses at the API boundary.
+The end-to-end test also re-verifies the M1 offset invariant through the entire stack: for every clause returned over HTTP, `raw_text[char_start:char_end] == source_text`. The grounding guarantee is not something the pipeline has internally and then loses at the API boundary.
 
 ## Where M3 ended up
 
@@ -694,20 +694,20 @@ cd api
 .venv/Scripts/python.exe -m uvicorn app.main:app --reload
 ```
 
-Then open <http://localhost:8000/docs> — FastAPI generates interactive documentation from the route signatures and response models, so you can upload a policy and watch the status endpoint from a browser with no frontend at all.
+Then open <http://localhost:8000/docs>. FastAPI generates interactive documentation from the route signatures and response models, so you can upload a policy and watch the status endpoint from a browser with no frontend at all.
 
-**Question to sit with before M4:** the `/clauses/{id}` endpoint returns `source_text`, `char_start` and `char_end` — the verbatim wording and its exact position in the document. Serving the offsets costs bytes and the UI does not currently draw anything with them. Why send them at all?
+**Question to sit with before M4:** the `/clauses/{id}` endpoint returns `source_text`, `char_start` and `char_end`: the verbatim wording and its exact position in the document. Serving the offsets costs bytes and the UI does not currently draw anything with them. Why send them at all?
 
 <details>
 <summary>Answer</summary>
 
 Two reasons, one immediate and one structural.
 
-**They make the claim checkable by a third party.** `source_text` alone is *our copy* of the wording — a reader has to trust that it matches the PDF. The offsets say precisely where in the extracted document those characters live, so anyone can verify the quote against the document independently of anything this app says about it. That is the difference between showing evidence and asking to be believed.
+**They make the claim checkable by a third party.** `source_text` alone is *our copy* of the wording, and a reader has to trust that it matches the PDF. The offsets say precisely where in the extracted document those characters live, so anyone can verify the quote against the document independently of anything this app says about it. That is the difference between showing evidence and asking to be believed.
 
-**They are what the PDF highlighter will need.** M4 renders the plain-language and original text side by side, but the roadmap has a real PDF viewer that highlights the exact clause. Offsets and the stored bounding boxes are what make that a later drop-in rather than a data migration — the decision made in M1 to capture `bboxes` before anything used them, for the same reason.
+**They are what the PDF highlighter will need.** M4 renders the plain-language and original text side by side, but the roadmap has a real PDF viewer that highlights the exact clause. Offsets and the stored bounding boxes are what make that a later drop-in rather than a data migration. M1 captured `bboxes` before anything used them for the same reason.
 
-There is a third, quieter reason: they make the invariant **testable at the boundary**. Because the API exposes the offsets, the end-to-end test can assert `raw_text[char_start:char_end] == source_text` on data that has travelled through the database and out over HTTP. An invariant you cannot observe from outside is one you cannot verify has survived the trip.
+A third reason: they make the invariant testable at the boundary. Because the API exposes the offsets, the end-to-end test can assert `raw_text[char_start:char_end] == source_text` on data that has travelled through the database and out over HTTP. An invariant you cannot observe from outside is one you cannot verify has survived the trip.
 </details>
 
 # M4: The interface, and designing against a default
@@ -716,7 +716,7 @@ There is a third, quieter reason: they make the invariant **testable at the boun
 
 A web UI over the API: upload a policy, watch it process, read the ranked results, open any clause beside the policy's own wording.
 
-The explicit brief was that it **must not look AI-generated**. That is a real and specific failure mode, not a vague aesthetic worry, and it is worth naming precisely because it has a recognisable signature: purple or violet gradients, glassmorphism, a centered hero with a big heading and a subtitle beneath, three-column feature grids with icons in coloured circles, uniform bubbly border-radius, gradient buttons, and Inter (or its stand-in, Space Grotesk) doing all the typographic work.
+The explicit brief was that it must not look AI-generated. That failure mode has a recognisable signature: purple or violet gradients, glassmorphism, a centered hero with a big heading and a subtitle beneath, three-column feature grids with icons in coloured circles, uniform bubbly border-radius, gradient buttons, and Inter (or its stand-in, Space Grotesk) doing all the typographic work.
 
 Those choices are what a model reaches for by default. Avoiding them requires having an actual idea instead.
 
@@ -724,34 +724,34 @@ Those choices are what a model reaches for by default. Avoiding them requires ha
 
 The idea came from asking what this product structurally *is*, rather than what category it belongs to.
 
-It is not a dashboard, and it is not a marketing site. **It is a document that argues with another document.** That has an established form: the **critical edition** — a source text on one side, an editor's gloss on the other, with an apparatus of notes and references.
+The product is a document that argues with another document, which rules out a dashboard or a marketing-site layout. That has an established form: the critical edition, with a source text on one side, an editor's gloss on the other, and an apparatus of notes and references.
 
-That metaphor was already latent in the data model. The API returns, for every clause, `source_text` alongside `char_start` and `char_end` — the original wording and its exact position. The design's job was to make that structural fact visible, rather than inventing a decorative theme and laying it on top.
+That metaphor was already latent in the data model. The API returns, for every clause, `source_text` alongside `char_start` and `char_end`: the original wording and its exact position. The design's job was to make that structural fact visible, rather than inventing a decorative theme and laying it on top.
 
 Everything else followed:
 
 | Decision | Because |
 |---|---|
 | Warm archival paper `#F7F4EE`, not white | Documents are printed on paper; clinical white is the SaaS default |
-| **2px** border radius | Documents have square corners, and uniform bubble-radius is the loudest generated-design tell |
+| 2px border radius | Documents have square corners, and uniform bubble-radius is the loudest generated-design tell |
 | Left-aligned masthead with a double rule | A report leads with its identity and metadata; a centered hero is a pitch |
 | Borders, never decorative shadows | Structure in a document is drawn with rules |
 | Minimal-functional motion only | This is an anxiety product; playful easing would be actively wrong |
 
 The full system was written down before any screen was built, including a list of forbidden anti-patterns: gradients, glassmorphism, centered heroes, uniform bubble radius, and Inter as a typeface.
 
-## Concept 11: Typography can carry meaning, not just style
+## Concept 11: Typography can carry meaning
 
 This is the part of the system worth stealing for other projects.
 
-The app has two voices: **the policy's** and **its own**. Rather than labelling them, the design gives them different typefaces:
+The app has two voices: the policy's and its own. Rather than labelling them, the design gives them different typefaces:
 
 ```css
 --font-sans:   "Instrument Sans"  /* everything the app says */
 --font-source: "Source Serif 4"   /* the policy's own words, and nothing else */
 ```
 
-A document serif for the source, a neutral sans for the translation. In `ClausePanel.tsx` the verbatim quotation carries a single `.verbatim` class, and the result is that the side-by-side needs **no "original wording" caption** — a reader can see which is which before reading a word.
+A document serif for the source, a neutral sans for the translation. In `ClausePanel.tsx` the verbatim quotation carries a single `.verbatim` class, and the result is that the side-by-side needs no "original wording" caption: a reader can see which is which before reading a word.
 
 That is typography doing semantic work instead of decorating. Two more faces complete the set, each with a job rather than a mood: Instrument Serif for display, JetBrains Mono for anything numeric (clause numbers, page references, impact scores, with tabular figures so columns of numbers line up for comparison).
 
@@ -764,7 +764,7 @@ Severity uses exactly two hues:
 - Oxide red `#A8321E`. Can deny or void your claim
 - Ochre `#946A22`. Reduces what you are paid
 
-Deliberately **not** a red/amber/green traffic light. A traffic light implies a scale from bad to good, but "reduces your payout" is not a midpoint between "denied" and "covered" — it is a **different kind of harm**. Encoding it as a middle state would misrepresent it.
+The palette is deliberately not a red/amber/green traffic light. A traffic light implies a scale from bad to good, and "reduces your payout" is a different kind of harm from "denied", not a midpoint between "denied" and "covered". Encoding it as a middle state would misrepresent it.
 
 And the hard rule, from the design system:
 
@@ -776,9 +776,9 @@ A risk product that fails a colourblind reader is a broken risk product. This ru
 
 Asked what one thing a person should remember after using this, the answer chosen was:
 
-> **"I can see what they were hiding."**
+> "I can see what they were hiding."
 
-That is a design answer with an engineering consequence. `buriedness` had been a number computed in the backend, used to sort a list and otherwise invisible. If the whole promise is showing the reader what was obscured, then **hiding the reasons wastes the project's most distinctive idea.**
+That is a design answer with an engineering consequence. `buriedness` had been a number computed in the backend, used to sort a list and otherwise invisible. If the whole promise is showing the reader what was obscured, then hiding the reasons wastes the project's most distinctive idea.
 
 So M4 changed the backend. `ClauseAnalysis` now stores the four buriedness components separately rather than only their blended total, and the API exposes them, because `buriedness: 0.47` tells a reader nothing while its parts tell them exactly what happened. `clauseMeta.ts` turns them into sentences:
 
@@ -788,7 +788,7 @@ WHY YOU'D MISS THIS  buried on page 3, deep in the document ·
                      sends you to other clauses to understand it
 ```
 
-Thresholds are set so a typical clause produces one or two reasons rather than four. **A note that fires on everything stops being information.**
+Thresholds are set so a typical clause produces one or two reasons rather than four. A note that fires on everything stops being information.
 
 ## Failure 8: enforcing a rule everywhere except where it mattered
 
@@ -798,7 +798,7 @@ The impact score lived in a right-hand rail, which was hidden below the `sm` bre
 <div className="hidden w-[132px] shrink-0 pt-0.5 sm:block">
 ```
 
-Reasonable-looking, and wrong. On a phone the severity colour and its text label survived, but **the numeral disappeared entirely** — which is precisely the rule the design system states as non-negotiable, violated by the same person who wrote it, in the same week.
+Reasonable-looking, and wrong. On a phone the severity colour and its text label survived, but the numeral disappeared entirely. That breaks the rule the design system states as non-negotiable, and the person who wrote the rule broke it in the same week.
 
 It was invisible in code review and obvious in a screenshot at 430px wide.
 
@@ -810,13 +810,13 @@ The fix keeps the rail hidden but moves the number inline at that width, so the 
 </span>
 ```
 
-> A design rule you have written down is not a design rule you have enforced. Responsive breakpoints are where they quietly break, because a rule holds at the width you happen to be developing at.
+> A design rule you have written down is not a design rule you have enforced. Responsive breakpoints are where they silently break, because a rule holds at the width you happen to be developing at.
 
-**A second bug from the same screenshot pass:** the impact bar used `bg-current` inside a container whose text colour was never set, so it inherited plain ink instead of the severity hue, and its track was nearly invisible against the page. The bar was drawn but carried no information. Moving the band colour onto the rail container fixed both — the bar now reads as a proportional oxide-red measure, and 85 versus 82 is visibly different.
+**A second bug from the same screenshot pass:** the impact bar used `bg-current` inside a container whose text colour was never set, so it inherited plain ink instead of the severity hue, and its track was nearly invisible against the page. The bar was drawn but carried no information. Moving the band colour onto the rail container fixed both: the bar now reads as a proportional oxide-red measure, and 85 versus 82 is visibly different.
 
 ## Concept 13: You cannot review a design you have not looked at
 
-Both bugs above were found the same way: by driving a real browser against a real policy and **looking at the result**.
+Both bugs above were found the same way: by driving a real browser against a real policy and looking at the result.
 
 `web/scripts/screenshots.mjs` is committed rather than thrown away. It launches Playwright, uploads the 39-clause golden policy through the actual UI, waits for the pipeline, and captures every screen in light and dark at retina density:
 
@@ -829,7 +829,7 @@ This matters more than it sounds. The design system forbids a specific list of v
 Three things the screenshots caught that no other check could:
 1. The score disappearing at narrow widths (a stated rule, broken).
 2. The impact bar carrying no colour and no visible track.
-3. A large empty lower half on the upload page, which reads as unfinished. Filled with a "What it looks for" strip that names the four costly clause types — content that sets expectations rather than padding that fills space.
+3. A large empty lower half on the upload page, which reads as unfinished. Filled with a "What it looks for" strip that names the four costly clause types, content that sets expectations rather than padding that fills space.
 
 ## Failure 9: module resolution follows the file, not the shell
 
@@ -839,11 +839,11 @@ The screenshot script was first written to a scratch directory and run from the 
 Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright'
 ```
 
-Node resolves imports by walking up from **the importing file's own location** looking for `node_modules`, not from the shell's working directory. A script in a temp folder has no `node_modules` above it, so nothing resolves however you invoke it.
+Node resolves imports by walking up from *the importing file's own location* looking for `node_modules`, not from the shell's working directory. A script in a temp folder has no `node_modules` above it, so nothing resolves however you invoke it.
 
-This is the same failure that appeared in M0 with `ModuleNotFoundError: No module named 'app'` for a Python script in a temp directory. Two languages, one rule: **module resolution follows the file, not the shell.**
+This is the same failure that appeared in M0 with `ModuleNotFoundError: No module named 'app'` for a Python script in a temp directory. Two languages, one rule: module resolution follows the file, not the shell.
 
-The fix was also the better outcome — the script moved into `web/scripts/` and became a committed, repeatable tool instead of a throwaway.
+The fix was also the better outcome: the script moved into `web/scripts/` and became a committed, repeatable tool instead of a throwaway.
 
 ## A smaller failure worth knowing
 
@@ -882,18 +882,18 @@ cd web && npm run dev          # http://localhost:5173
 cd web && npm run shots        # writes web/.screenshots/
 ```
 
-Toggle the theme with the button marked **Ink** / **Paper** in the masthead.
+Toggle the theme with the button marked "Ink" / "Paper" in the masthead.
 
 **Question to sit with before M5:** the clause panel shows the policy's exact wording and, beneath it, a line in mono reading `characters 6,757–7,013 of the extracted document`. Nobody asked for a character range, and no ordinary reader will ever use it. Why is it on screen?
 
 <details>
 <summary>Answer</summary>
 
-Because it is the difference between **showing evidence and asking to be believed.**
+Because it is the difference between showing evidence and asking to be believed.
 
-Everything else on that panel is the app's claim about the policy: a plain-language rewrite, a clause type, an impact score. All of it is generated, and all of it could be wrong. The quotation plus its exact position is the one element a reader can check *independently of anything the app says* — that text is at that offset in the document, or it is not.
+Everything else on that panel is the app's claim about the policy: a plain-language rewrite, a clause type, an impact score. All of it is generated, and all of it could be wrong. The quotation plus its exact position is the one element a reader can check *independently of anything the app says*: that text is at that offset in the document, or it is not.
 
-Most readers will never verify it. That is not the point. The point is that verification is **possible and visible**, which is what separates a tool that shows its working from one that asks for trust. In a domain where a confident wrong answer costs someone a real claim, a system that cannot be checked should not be believed — including by the person who built it.
+Most readers will never verify it, but verification is possible and visible, which is what separates a tool that shows its working from one that asks for trust. In a domain where a confident wrong answer costs someone a real claim, a system that cannot be checked should not be believed, even by the person who built it.
 
 There is a practical reason too: those offsets are what the future PDF highlighter needs, and displaying them keeps them honest. A number on screen that stopped matching the document would be noticed. A number only used internally would not.
 </details>
@@ -902,11 +902,11 @@ There is a practical reason too: those offsets are what the future PDF highlight
 
 ## The question this answers
 
-This project runs `qwen2.5:7b-instruct-q4_K_M` through Ollama, on a laptop GPU. Most production LLM products do not do that — they call a hosted frontier API. So the obvious question, and one worth answering honestly rather than defensively: **was local a compromise?**
+This project runs `qwen2.5:7b-instruct-q4_K_M` through Ollama, on a laptop GPU. Most production LLM products call a hosted frontier API instead. So the obvious question is whether local was a compromise.
 
 Partly yes, and partly no. The distinction matters more than the answer.
 
-## What production systems actually use
+## What production systems use
 
 | Tier | Examples | Typically used for |
 |---|---|---|
@@ -914,36 +914,36 @@ Partly yes, and partly no. The distinction matters more than the answer.
 | Small hosted | `claude-haiku-4-5-20251001`, mini / flash tiers | High-volume classification and routing |
 | Local, open-weight | Qwen, Llama, Mistral, via Ollama or vLLM | Privacy, offline use, regulated data, very high volume |
 
-On hard reasoning, a frontier hosted model beats a 7B local model **badly**, not marginally. Nobody builds a serious legal-reasoning product on a 7B model because it is the strongest thing available. Any claim otherwise should be treated with suspicion.
+On hard reasoning, a frontier hosted model beats a 7B local model badly, not marginally. Nobody builds a serious legal-reasoning product on a 7B model because it is the strongest thing available. Any claim otherwise should be treated with suspicion.
 
 ## Cost is not the reason here
 
 It is worth doing the arithmetic rather than assuming, because the assumption is usually wrong in both directions.
 
-One policy in this project is about 40 clauses. Each clause costs roughly 500 input tokens (the long system prompt with the taxonomy, plus the clause) and about 200 output tokens. That is **~28,000 tokens per document**.
+One policy in this project is about 40 clauses. Each clause costs roughly 500 input tokens (the long system prompt with the taxonomy, plus the clause) and about 200 output tokens. That is ~28,000 tokens per document.
 
-At frontier API prices, that is a few cents per policy. For a personal tool analysing one document at a time, **API cost is not a meaningful constraint.** Anyone claiming a local model here saved them money is optimising something that was never expensive.
+At frontier API prices, that is a few cents per policy. For a personal tool analysing one document at a time, API cost is not a meaningful constraint. Anyone claiming a local model here saved them money is optimising something that was never expensive.
 
 ## The reason that does hold up
 
 The upload screen says it plainly: *"Your policy is never uploaded to anyone."*
 
-An insurance policy is a personal health and financial document. It names conditions, ages, sums insured. For this specific product, running locally is not the budget option — it is a **product property that cannot be bought back later by switching to an API.** Once the document leaves the machine, that promise is gone.
+An insurance policy is a personal health and financial document. It names conditions, ages, sums insured. For this specific product, running locally is a product property that cannot be bought back later by switching to an API. Once the document leaves the machine, that promise is gone.
 
 That is the honest justification. Not cost, not capability. Privacy.
 
 ## The counterintuitive part
 
-The project's strongest correctness claim exists **partly because** it is local.
+The project's strongest correctness claim exists *partly because* it is local.
 
-`llama.cpp`, which runs under Ollama, does grammar-level token masking: at each decoding step the sampler is prevented from emitting any token that could not continue a valid document under the supplied JSON Schema. That is what makes a fabricated citation *unrepresentable* rather than merely unlikely — the guarantee this whole project's grounding design rests on.
+`llama.cpp`, which runs under Ollama, does grammar-level token masking: at each decoding step the sampler is prevented from emitting any token that could not continue a valid document under the supplied JSON Schema. That is what makes a fabricated citation *unrepresentable* rather than merely unlikely, and the project's grounding design rests on that guarantee.
 
 Hosted providers differ here, and the difference is worth checking rather than assuming:
 
 - OpenAI's structured outputs with `strict: true` are also grammar-constrained, giving a comparable guarantee.
-- Anthropic's tool `input_schema` is validated — highly reliable, but validation after generation is a different mechanism from masking during it.
+- Anthropic's tool `input_schema` is validated: highly reliable, but validation after generation is a different mechanism from masking during it.
 
-So "switch to a bigger model" is **not automatically a free upgrade** for the citation guarantee. A larger model reasons better; whether it can still make an invalid citation impossible depends on the provider's mechanism, not on its size. That is exactly the kind of thing to verify before assuming bigger is strictly better.
+So "switch to a bigger model" is not automatically a free upgrade for the citation guarantee. A larger model reasons better; whether it can still make an invalid citation impossible depends on the provider's mechanism, not on its size. That is exactly the kind of thing to verify before assuming bigger is strictly better.
 
 ## Why this is a decision and not a lock-in
 
@@ -951,15 +951,15 @@ Nothing here has to be guessed at, which is the real payoff of the eval harness:
 
 - `settings.model` in `api/app/config.py` is a one-line change.
 - Every model call funnels through a single `_post_chat` in `api/app/llm/client.py`, so another provider is a small adapter, not a rewrite.
-- `evals/run_eval.py` already reports classification macro-F1 and ranking quality, so a swap can be **measured** rather than argued about.
+- `evals/run_eval.py` already reports classification macro-F1 and ranking quality, so a swap can be *measured* rather than argued about.
 
 ## What separates a real project from a wrapper
 
-Not the model. The model is the most replaceable part of the system — a config line.
+Not the model. The model is the most replaceable part of the system: a config line.
 
 What is not replaceable is the surrounding engineering: deterministic stages where determinism is possible (segmentation, scoring), verifiable grounding (character offsets, enum-constrained citation IDs), and an eval harness that turns "which model" into a measurement instead of an opinion.
 
-That is worth internalising beyond this project. **Model choice is a parameter. The system around it is the work.**
+Model choice is a parameter; the system around it is the work.
 
 ## The plan from here
 
@@ -967,7 +967,7 @@ Keep local as the default, for the privacy reason above.
 
 Then, once the scenario simulator exists, run the same eval against a hosted frontier model and publish the difference. The scenario simulator is precisely where a 7B model is expected to struggle: multi-hop reasoning where a waiting period, an exclusion and a notice condition all bear on a single question. Single-clause classification already scores macro-F1 1.000 locally; combining three interacting rules is a different task.
 
-If a hosted model scores materially higher there, the defensible architecture is a **hybrid**: local for the 40 bulk classifications, which are private, effectively free, and already perfect on the golden set; hosted for the one hard reasoning call, where capability actually shows up.
+If a hosted model scores materially higher there, the defensible architecture is a hybrid: local for the 40 bulk classifications, which are private, effectively free, and already perfect on the golden set; hosted for the one hard reasoning call, where capability shows up.
 
 A table reading *"local 7B: 0.72 · frontier: 0.91 · here is the trade we chose and why"* is worth more than either number alone, because it shows the choice was made rather than defaulted into.
 
