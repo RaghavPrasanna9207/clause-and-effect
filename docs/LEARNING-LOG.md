@@ -3525,8 +3525,8 @@ keep.
 <details>
 <summary>Answer</summary>
 
-**`verify_exception` keeps the first and drops the second. A substring check
-keeps both.** (Both results were checked by running the function on this
+`verify_exception` keeps the first and drops the second. A substring check
+keeps both. (Both results were checked by running the function on this
 exact text.)
 
 Both spans appear in the clause word for word, so a substring check has nothing
@@ -3863,7 +3863,7 @@ pass by simply never filling that field for someone else. On the unchanged
 prompt, "My father, 82" failed the same way. The bug was real on a sentence
 nobody had looked at.
 
-- A one-line example ("my husband is 64" → `age`: 64,
+- A one-line example ("my husband is 64" gives `age`: 64,
   `age_at_policy_start`: null): `father-82` still wrong in both runs, and
   `mother-75`, right at baseline, now wrong in both. Reverted.
 - A rename. The wrong answers had a pattern: `age` came back empty and the
@@ -4137,7 +4137,7 @@ being rewritten to match whatever the system outputs. So the question went to
 the project owner rather than being decided here, with the evidence. Two
 changes were approved, and each is recorded inside the case itself:
 
-- `cataract-served`: `covered` → `conditional`, with clause 5.4 added as its
+- `cataract-served`: `covered` to `conditional`, with clause 5.4 added as its
   deciding clause, matching how `oral-chemo-limit` lists 5.5;
 - `room-rent-within-cap`: citing 5.1 is no longer forbidden, because citing the
   limit the room stays within is a fair reason for `covered`, while relying on
@@ -4431,7 +4431,7 @@ major:
    example of a carve-out is one of the 40 eval questions, written into the
    instructions, and replacing it broke eight cases.
 2. `day-care-not-listed`. Six hours on a drip, where day care is paid only
-   for treatments "listed in Annexure II" and the document has no Annexure II —
+   for treatments "listed in Annexure II" and the document has no Annexure II. It is
    still answered "covered" in about two samples of seven. A confident wrong
    answer where the honest one is "the document cannot tell".
 
@@ -4459,7 +4459,7 @@ this milestone used this output.
 
 ## Concept 36: a score on the cases you tuned against
 
-Every decision in M10-M13 — keep this change, revert that one — was made by
+Every decision in M10-M13 (keep this change, revert that one) was made by
 looking at how the same 40 cases moved. Each decision was reasonable. But a
 system chosen by hundreds of small decisions against one set of questions will
 fit that set, the same way a model trained and tested on the same data scores
@@ -4468,12 +4468,12 @@ instance of a much more general effect.
 
 The only way to know how much of 0.975 was fit rather than skill is to ask
 questions the system was never shaped around. So a held-out batch of 16 new
-cases was written against the same policy and conventions — cancer
+cases was written against the same policy and conventions: cancer
 reconstruction (testing the same carve-out as the prompt's burn example, without
 being it), war, a hysterectomy too soon, scuba diving, surrogacy, an ICU rate
 within its cap, a co-payment where the age at inception has to be derived, stem
 cell therapy, late notice of planned surgery, tests too early before admission,
-a dental accident, lost luggage, a short procedure — and run with the current
+a dental accident, lost luggage, a short procedure. They were run with the current
 system before anything else changed.
 
 **Result: 12 of 16 = 0.750**, every case unanimous across three samples, against
@@ -4489,7 +4489,7 @@ out: any fix designed while looking at it will tend to fix it. So:
 
 - the first batch became a *diagnostic* set once its failures were read;
 - a second batch of 13 cases (`scenarios-heldout-2.json`) was written after
-  the first round of fixes existed and before any run of it — mountaineering,
+  the first round of fixes existed and before any run of it: mountaineering,
   contraception, a cataract too soon, maternity after the wait, drink-driving,
   an ICU rate over its cap, a co-payment that does not apply, notice given in
   time, physiotherapy inside the post-discharge window, deep brain stimulation,
