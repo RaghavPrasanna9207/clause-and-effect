@@ -1,4 +1,4 @@
-# Learning Log
+# Learning log
 
 A running record of what was built, why, and what broke along the way. Written so that reading it top to bottom teaches this codebase from scratch.
 
@@ -6,19 +6,19 @@ A running record of what was built, why, and what broke along the way. Written s
 
 ## What M0 had to prove
 
-Before any PDF parsing or UI, one question had to be answered: **can a 7-billion parameter model running on a laptop GPU be trusted to produce structured output we can build a pipeline on?** If not, the whole architecture changes.
+Before any PDF parsing or UI, one question had to be answered: can a 7-billion parameter model running on a laptop GPU be trusted to produce structured output we can build a pipeline on? If not, the whole architecture changes.
 
-Answer: yes, but only with two mechanisms in place — and the second one was not obvious until it failed.
+Answer: yes, but only with two mechanisms in place, and the second one was not obvious until it failed.
 
 ## Concept 1: Constrained decoding
 
-**The problem it solves.** The usual way to get JSON from a model is to ask nicely — "respond only with valid JSON" — then defend yourself: strip markdown fences, catch parse errors, retry when it apologises instead of answering. You are *hoping*, and hope fails a few percent of the time. At 200 clauses per document, a few percent is several failures per run.
+**The problem it solves.** The usual way to get JSON from a model is to ask nicely ("respond only with valid JSON") and then defend yourself: strip markdown fences, catch parse errors, retry when it apologises instead of answering. You are *hoping*, and hope fails a few percent of the time. At 200 clauses per document, a few percent is several failures per run.
 
-**How it actually works.** A language model generates one token at a time. At each step it produces a probability distribution over the whole vocabulary and samples one token. Constrained decoding inserts a filter into that loop: given the JSON Schema and the partial output so far, it computes which tokens *could* legally come next, and sets every other token's probability to zero before sampling.
+**How it works.** A language model generates one token at a time. At each step it produces a probability distribution over the whole vocabulary and samples one token. Constrained decoding inserts a filter into that loop: given the JSON Schema and the partial output so far, it computes which tokens *could* legally come next, and sets every other token's probability to zero before sampling.
 
-Say the schema is `{"clause_type": {"enum": ["coverage", "exclusion", ...]}}`. After emitting `{"clause_type": "`, the only tokens with non-zero probability are those that begin one of your seven values. The model cannot write `"Limitation"` — not "is discouraged from", *cannot*. There is no path through the sampler that produces it.
+Say the schema is `{"clause_type": {"enum": ["coverage", "exclusion", ...]}}`. After emitting `{"clause_type": "`, the only tokens with non-zero probability are those that begin one of your seven values. The model cannot write `"Limitation"`: there is no path through the sampler that produces it.
 
-**Why this is a big deal.** It converts a prompt-engineering problem into a type system. `json.loads()` on the result cannot fail on malformed syntax. In `app/llm/client.py` this is the entire `format` parameter:
+**What it changes.** It converts a prompt-engineering problem into a type system. `json.loads()` on the result cannot fail on malformed syntax. In `app/llm/client.py` this is the entire `format` parameter:
 
 ```python
 "format": schema,   # a grammar constraint, not a hint
@@ -30,30 +30,30 @@ Say the schema is `{"clause_type": {"enum": ["coverage", "exclusion", ...]}}`. A
 
 | Schema | Model output |
 |---|---|
-| `clause_type` as plain string | `"Limitation"` — invented, not in our taxonomy |
-| `clause_type` with `enum` | `"exclusion"` — forced into our vocabulary |
+| `clause_type` as plain string | `"Limitation"`, invented and not in our taxonomy |
+| `clause_type` with `enum` | `"exclusion"`, forced into our vocabulary |
 
-## Concept 2: What constrained decoding does NOT give you
+## Concept 2: What constrained decoding does not give you
 
-**This is the real lesson of M0, and it arrived as a failure.**
+M0's main lesson arrived as a failure.
 
-With the enum in place, I ran four real clauses through a bare prompt — *"You classify Indian health insurance policy clauses"* — and nothing else.
+With the enum in place, I ran four real clauses through a bare prompt (*"You classify Indian health insurance policy clauses"*) and nothing else.
 
 | Clause | Model said | Correct answer |
 |---|---|---|
 | "No claim payable for pre-existing disease during the first 36 months" | `exclusion` | `waiting_period` |
-| "Room rent limited to 1% of Sum Insured per day" | **`coverage`** | `sub_limit` |
-| "Notice must be given within 24 hours, failing which the claim may be repudiated" | **`coverage`** | `condition` |
+| "Room rent limited to 1% of Sum Insured per day" | `coverage` | `sub_limit` |
+| "Notice must be given within 24 hours, failing which the claim may be repudiated" | `coverage` | `condition` |
 
-**Every answer was a valid member of the enum. Two were badly wrong.**
+Every answer was a valid member of the enum. Two were badly wrong.
 
-Worse, look at the *direction* of the errors. A clause that quietly caps your payout, and a clause that can void your claim entirely, were both filed under `coverage` — the reassuring bucket, the one a user scrolls past. Our own classifier reproduced the exact harm this project exists to prevent.
+Worse, look at the *direction* of the errors. A clause that caps your payout, and a clause that can void your claim entirely, were both filed under `coverage`: the reassuring bucket, the one a user scrolls past. Our own classifier reproduced the exact harm this project exists to prevent.
 
-**Root cause.** The enum constrains the *shape* of the answer. It says nothing about the *meaning* of the labels. The model saw seven plausible English words and picked by vibe. Nothing had told it that in this system `sub_limit` means "caps a payout" and `condition` means "a duty whose breach voids the claim". And these categories genuinely overlap — a room-rent cap *is* describing coverage; it just happens to be describing its ceiling.
+**Root cause.** The enum constrains the *shape* of the answer. It says nothing about the *meaning* of the labels. The model saw seven plausible English words and picked by vibe. Nothing had told it that in this system `sub_limit` means "caps a payout" and `condition` means "a duty whose breach voids the claim". And these categories overlap: a room-rent cap *is* describing coverage; it happens to be describing its ceiling.
 
-> **Constrained decoding guarantees the shape of an answer, never the judgment behind it.** This generalises far beyond this project.
+> Constrained decoding guarantees the shape of an answer, never the judgment behind it, in any system that uses it.
 
-**The fix** — entirely in the prompt, no code change. `app/llm/prompts.py` now defines each label in the system's own terms, and adds ordered tie-breakers for the overlaps:
+**The fix.** It is entirely in the prompt, with no code change. `app/llm/prompts.py` now defines each label in the system's own terms, and adds ordered tie-breakers for the overlaps:
 
 ```
 1. Does it cap or reduce an amount?             -> sub_limit
@@ -65,15 +65,15 @@ Worse, look at the *direction* of the errors. A clause that quietly caps your pa
 
 "The more specific label always wins" is what resolves the overlap: the cap beats the coverage it is capping.
 
-**Result on 8 clauses spanning all 7 types: 8/8 correct.** Same model, same enum, same code — the entire difference was telling it what our words mean.
+Result on 8 clauses spanning all 7 types: 8/8 correct. Same model, same enum, same code: the entire difference was telling it what our words mean.
 
 ## Concept 3: Content-addressed caching
 
-Analysing a 200-clause policy takes 2–5 minutes. Without a cache, every prompt tweak costs a full re-run just to see the effect on the few clauses you changed.
+Analysing a 200-clause policy takes 2-5 minutes. Without a cache, every prompt tweak costs a full re-run just to see the effect on the few clauses you changed.
 
-`app/llm/cache.py` keys each response on a SHA-256 of **everything that could change the answer**: model, prompt version, messages, and schema.
+`app/llm/cache.py` keys each response on a SHA-256 of everything that could change the answer: model, prompt version, messages, and schema.
 
-**Why hash all four.** The nastiest bug in an LLM pipeline is editing a prompt, seeing no change, and concluding the model ignored you — when in fact a stale cache entry was served. Making the prompt version part of the key makes that impossible by construction: change the prompt, and it is a different key. There is no "remember to clear the cache" step to forget. `PROMPT_VERSION` is already at `v2-typed-definitions` because of the fix above.
+**Why hash all four.** The nastiest bug in an LLM pipeline is editing a prompt, seeing no change, and concluding the model ignored you, when in fact a stale cache entry was served. Making the prompt version part of the key makes that impossible by construction: change the prompt, and it is a different key. There is no "remember to clear the cache" step to forget. `PROMPT_VERSION` is already at `v2-typed-definitions` because of the fix above.
 
 One subtlety worth internalising, from `make_key`:
 
@@ -81,7 +81,7 @@ One subtlety worth internalising, from `make_key`:
 json.dumps({...}, sort_keys=True)
 ```
 
-Python dicts preserve insertion order, so two logically identical schemas built with their fields in a different order would serialise differently, hash differently, and silently miss the cache forever. `sort_keys=True` is not tidiness — it is correctness.
+Python dicts preserve insertion order, so two logically identical schemas built with their fields in a different order would serialise differently, hash differently, and silently miss the cache forever. So `sort_keys=True` is required for correctness.
 
 The cache lives in its own SQLite file so `rm data/llm_cache.db` resets model output without touching uploaded documents.
 
@@ -92,20 +92,20 @@ Everything in the architecture follows from these, gathered before writing any c
 | | |
 |---|---|
 | Hardware | RTX 4060 Laptop, 8GB VRAM, 15.7GB RAM |
-| Model | `qwen2.5:7b-instruct-q4_K_M`, 4.7GB — fits fully in VRAM |
+| Model | `qwen2.5:7b-instruct-q4_K_M`, 4.7GB, fits fully in VRAM |
 | Cold start | ~27s to load into VRAM |
 | Warm throughput | ~50 tokens/sec |
 | Batched | 3 clauses in 4.4s ≈ 1.5s/clause |
 
 The cold start is why `client.warm()` runs in the FastAPI `lifespan` hook: pay the 27 seconds at startup, not during a user's first upload where it looks like a crash.
 
-`temperature=0.0` throughout is not decoration. Extraction must be reproducible, or both the cache and the eval numbers become meaningless.
+`temperature=0.0` is used throughout because extraction must be reproducible, or both the cache and the eval numbers become meaningless.
 
 ## What broke, beyond the classification failure
 
-**PowerShell mangled a here-string.** Piping a multi-line Python script into `python -c` via a PowerShell `@'...'@` here-string produced `SyntaxError: '{' was never closed` — the quoting was destroyed in transit. Fix: write the script to a file and run the file. Faster than debugging shell quoting, and the script sticks around to re-run.
+**PowerShell mangled a here-string.** Piping a multi-line Python script into `python -c` via a PowerShell `@'...'@` here-string produced `SyntaxError: '{' was never closed`: the quoting was destroyed in transit. Fix: write the script to a file and run the file. Faster than debugging shell quoting, and the script sticks around to re-run.
 
-**`ModuleNotFoundError: No module named 'app'`.** That script then lived in a temp directory, so Python's import path had no idea where `app/` was. Python resolves imports from `sys.path`, which is seeded from *the script's own directory* — not your shell's working directory. Fix: `PYTHONPATH=.../api`. The same issue in tests is handled by `pythonpath = .` in `pytest.ini`.
+**`ModuleNotFoundError: No module named 'app'`.** That script then lived in a temp directory, so Python's import path had no idea where `app/` was. Python resolves imports from `sys.path`, which is seeded from *the script's own directory*, not your shell's working directory. Fix: `PYTHONPATH=.../api`. The same issue in tests is handled by `pythonpath = .` in `pytest.ini`.
 
 **A bash heredoc choked on this very file.** Writing long markdown through `cat <<'EOF'` failed with `unexpected EOF while looking for matching quote`. Prose full of backticks, quotes and apostrophes is worth writing with a real file-writing tool rather than fighting shell quoting.
 
@@ -121,7 +121,7 @@ The cold start is why `client.warm()` runs in the FastAPI `lifespan` hook: pay t
 | `app/models.py` | Four SQLModel tables |
 | `app/db.py` | Engine and per-request sessions |
 | `app/main.py` | FastAPI app, CORS, `/health`, model warming |
-| `tests/test_llm.py` | The M0 gate — 5 tests |
+| `tests/test_llm.py` | The M0 gate: 5 tests |
 
 **Why `Clause` and `ClauseAnalysis` are separate tables:** parsing is deterministic and done once; analysis is LLM-driven and re-run constantly while tuning prompts. Separating them means re-analysis can never corrupt parsed structure, and one document can hold results from two prompt versions side by side for comparison.
 
@@ -145,16 +145,16 @@ cd api
 
 **Question to sit with before M1:** `test_schema_forces_a_value_even_for_an_unrelated_clause` feeds the classifier *"The quick brown fox jumps over the lazy dog"* and asserts it still returns a valid clause type. It returned `procedural`.
 
-Why is that the *correct* behaviour to assert — and what does it tell you about why `Verdict` in `taxonomy.py` needs an explicit `insufficient_information` member?
+Why is that the *correct* behaviour to assert? And what does it tell you about why `Verdict` in `taxonomy.py` needs an explicit `insufficient_information` member?
 
 <details>
 <summary>Answer</summary>
 
-Constrained decoding **cannot abstain**. The grammar permits only the seven values, so "I don't know" and "this isn't an insurance clause" are literally unsayable. The model must pick one, and it will.
+Constrained decoding *cannot abstain*. The grammar permits only the seven values, so "I don't know" and "this isn't an insurance clause" are literally unsayable. The model must pick one, and it will.
 
 So abstention only exists if you *build it into the vocabulary*. That is why `Verdict` carries `insufficient_information` as a first-class member: without it, the scenario simulator would be structurally incapable of saying "your policy doesn't address this", and would be forced to guess `covered` or `not_covered` on a question the document never answers.
 
-In this domain that distinction is the whole ballgame — a confident wrong answer costs someone a real claim.
+In this domain a confident wrong answer costs someone a real claim.
 </details>
 
 # M1: Reading the PDF (text, offsets and clause boundaries)
@@ -163,8 +163,8 @@ In this domain that distinction is the whole ballgame — a confident wrong answ
 
 Two things, from a policy PDF:
 
-1. **The document's text**, with a guarantee strong enough that any later citation can be proven rather than trusted.
-2. Clause boundaries. The document split into the ~40 individual provisions that a policy is actually made of.
+1. The document's text, with a guarantee strong enough that any later citation can be proven rather than trusted.
+2. Clause boundaries. The document split into the ~40 individual provisions that a policy is made of.
 
 Neither stage uses a language model. That is a deliberate design decision, explained below.
 
@@ -180,13 +180,13 @@ for every line, always. Clauses inherit those offsets in stage 2.
 
 **Why bother, instead of just storing each clause's text on its own?**
 
-Because of what the app ultimately claims to a user. "The model said this, and here is our copy of some text" is weak — a copy can drift from its source after any edit, and nothing detects it. "The model said this, and the same characters sit at offset 14,203 of the document we actually parsed" is a different kind of claim. A slice cannot drift from what it is a slice of.
+Because of what the app ultimately claims to a user. "The model said this, and here is our copy of some text" is weak: a copy can drift from its source after any edit, and nothing detects it. "The model said this, and the same characters sit at offset 14,203 of the document we parsed" is a different kind of claim. A slice cannot drift from what it is a slice of.
 
 This is the foundation the entire grounding story rests on. `tests/test_ingest.py::test_every_line_slices_back_byte_identical` asserts it for every line of the test policy, and the docstring there says why it matters more than it might look:
 
-> If this ever fails, the app can still render confident explanations that point at the wrong part of the document — which is worse than not working at all, because it looks like it works.
+> If this ever fails, the app can still render confident explanations that point at the wrong part of the document. That is worse than not working at all, because it looks like it works.
 
-There is a second, subtler test — `test_offsets_are_ordered_and_non_overlapping`. Offsets could each slice back correctly while still being out of order. Then "clause A comes before clause B" would be wrong, and with it the document-position component of the buriedness score in M2.
+There is a second, subtler test: `test_offsets_are_ordered_and_non_overlapping`. Offsets could each slice back correctly while still being out of order. Then "clause A comes before clause B" would be wrong, and with it the document-position component of the buriedness score in M2.
 
 The invariant is upheld by one easily-missed detail in `ingest.py`:
 
@@ -202,34 +202,34 @@ It is tempting to hand the whole document to a model: *"split this into clauses.
 
 | | |
 |---|---|
-| **Reproducible** | Two runs give different boundaries, so every downstream number — clause counts, scores, eval metrics — becomes noise. |
-| **Verifiable** | A model that paraphrases while splitting destroys the character offsets above. |
-| **Fast** | A 12,000-character policy would be re-read on every single run. |
-| **Debuggable** | When a boundary is wrong you can step through a rule. You cannot step through a forward pass. |
+| Reproducible | Two runs give different boundaries, so every downstream number (clause counts, scores, eval metrics) becomes noise. |
+| Verifiable | A model that paraphrases while splitting destroys the character offsets above. |
+| Fast | A 12,000-character policy would be re-read on every single run. |
+| Debuggable | When a boundary is wrong you can step through a rule. You cannot step through a forward pass. |
 
-And it is unnecessary, because **the layout already encodes the structure**. A policy is typeset with headings in larger, bolder type, and clauses under numbers like "4.2", precisely so a human can navigate it. Reading that is a parsing problem, not a language problem.
+And it is unnecessary, because the layout already encodes the structure. A policy is typeset with headings in larger, bolder type, and clauses under numbers like "4.2", precisely so a human can navigate it. Reading that is a parsing problem, not a language problem.
 
 `api/app/pipeline/segment.py` classifies each line as a SECTION heading, a CLAUSE heading, or BODY, using font size relative to the document's own body size, clause numbering, and known section names.
 
-**"Relative to the document's own body size" is the important part.** `IngestResult.body_size()` measures the most common font size in *that* document, so a policy set in 8pt and one set in 11pt both work with the same thresholds. It is a mode, not a maximum, and weighted by character count rather than line count — headings are numerous but short, so counting lines could elect a heading size as the "body" size and invert every threshold in the file.
+**Why body size is measured per document.** `IngestResult.body_size()` measures the most common font size in *that* document, so a policy set in 8pt and one set in 11pt both work with the same thresholds. It is a mode, not a maximum, and weighted by character count rather than line count: headings are numerous but short, so counting lines could elect a heading size as the "body" size and invert every threshold in the file.
 
 ## Getting a document to test against
 
 Real insurer policy wordings are unsuitable for testing: redistributing copyrighted wording would make the repo non-self-contained, and nobody has labelled them.
 
-So `evals/golden/build_synthetic_policy.py` **generates** a 39-clause IRDAI-style policy, spanning all seven clause types, and emits a label file alongside the PDF. Because the PDF and the labels come from the same `CLAUSES` list, they can never disagree — there is no separate labelling step to drift out of sync.
+So `evals/golden/build_synthetic_policy.py` generates a 39-clause IRDAI-style policy, spanning all seven clause types, and emits a label file alongside the PDF. Because the PDF and the labels come from the same `CLAUSES` list, they can never disagree: there is no separate labelling step to drift out of sync.
 
-The clauses deliberately include the cases that break naive classifiers: a waiting period phrased to sound like an exclusion, a sub-limit phrased to sound like a benefit, and a `"Hospital"` definition whose narrowness quietly guts coverage elsewhere.
+The clauses deliberately include the cases that break naive classifiers: a waiting period phrased to sound like an exclusion, a sub-limit phrased to sound like a benefit, and a `"Hospital"` definition whose narrowness silently guts coverage elsewhere.
 
 ## Failure 1: the circular test
 
-**Everything above passed on the first run — 14/14 tests, in 0.19 seconds.**
+Everything above passed on the first run: 14/14 tests, in 0.19 seconds.
 
 That result was close to worthless, and it is worth understanding why.
 
 The segmenter's font-size thresholds were *tuned against the very PDF the tests run on*, and that PDF is generated by this repo. Passing proved the segmenter handles documents we designed to be easy. It said nothing about real ones.
 
-So `build_hostile()` was added: **the same 39 clauses, typeset with one font, one size, no bold, and the clause number run inline with the body** — the way many machine-generated policy PDFs actually arrive. Every styling signal removed.
+So `build_hostile()` was added: the same 39 clauses, typeset with one font, one size, no bold, and the clause number run inline with the body, which is how many machine-generated policy PDFs arrive. Every styling signal is removed.
 
 Result on the hostile document:
 
@@ -238,7 +238,7 @@ segments: 8      expected: 39
 MISSING: 1.1, 1.2, 1.3, ... 7.5     (all 39)
 ```
 
-**Total collapse.** Only the 7 section headings and one front-matter block survived. Every clause had been silently swallowed into its section.
+The result was a total collapse. Only the 7 section headings and one front-matter block survived. Every clause had been silently swallowed into its section.
 
 **Root cause.** The boundary rule read:
 
@@ -250,26 +250,26 @@ is_clause_start = number is not None and (
 )
 ```
 
-The numbering was detected perfectly. But I had written styling as a **requirement** when it should only ever have been **corroboration**. A line beginning "4.2" in a policy *is* a clause boundary, whatever font it is in.
+The numbering was detected perfectly. But I had written styling as a *requirement* when it should only ever have been *corroboration*. A line beginning "4.2" in a policy *is* a clause boundary, whatever font it is in.
 
 **Why I couldn't simply delete the guard.** The numbering regex `^(\d+(?:\.\d+)*)\.?\s+` also matches ordinary prose: insurance text is full of lines starting `"24 hours of hospitalisation"`, `"15 days from the date of discharge"`, `"1.5 lakhs and fifteen in-patient beds"`. Treating those as boundaries would shatter clauses into fragments.
 
-So the guard belonged on the **numbering pattern**, not on the font. `_numbering()` now returns `(number, is_strong)`:
+So the guard belonged on the numbering pattern, not on the font. `_numbering()` now returns `(number, is_strong)`:
 
-- Strong. Believed with no styling support: `(a)`, `(iv)`, `Clause 4.2`, or a dotted number followed by a **capital letter**.
+- Strong. Believed with no styling support: `(a)`, `(iv)`, `Clause 4.2`, or a dotted number followed by a capital letter.
 - Weak. Needs styling to corroborate: a bare integer, or a dotted number followed by lower case.
 
 The capital-letter test is what separates `"4.2 Room Rent Limit"` from `"1.5 lakhs and fifteen"`. Clause numbers are followed by a heading or a new sentence, so the next character is upper case; a measurement is followed by its unit in lower case.
 
-**The lesson:** *a test suite that only runs on data you designed proves your code handles data you designed.* The hostile document is now a permanent fixture, and `test_hostile_document_really_has_no_styling` guards the guard — if the generator ever started emitting bold text, the regression tests would keep passing for the wrong reason.
+**The lesson:** *a test suite that only runs on data you designed proves your code handles data you designed.* The hostile document is now a permanent fixture, and `test_hostile_document_really_has_no_styling` guards the guard: if the generator ever started emitting bold text, the regression tests would keep passing for the wrong reason.
 
 ## Failure 2: a data model that hid the fix
 
-After the fix, the hostile document produced 41 segments — the boundaries were being found. But the check still reported all 39 clauses missing.
+After the fix, the hostile document produced 41 segments, so the boundaries were being found. But the check still reported all 39 clauses missing.
 
 The check identified clauses by parsing the first word of `Segment.heading`. In the hostile document there *are* no headings: the number runs inline with the body, so `heading` is empty by design.
 
-The segmentation was correct; the **data model** was wrong. A clause's number is its stable identifier — the heading is optional decoration that many policies simply do not have. So `number` became a first-class field on `Segment`, rather than something re-parsed out of a heading string.
+The segmentation was correct; the data model was wrong. A clause's number is its stable identifier; the heading is optional decoration that many policies do not have. So `number` became a first-class field on `Segment`, rather than something re-parsed out of a heading string.
 
 Worth noticing: this bug was only visible *because* of the hostile document. On the styled PDF, heading-parsing worked fine and the design flaw was invisible.
 
@@ -279,7 +279,7 @@ With `number` in place, one test still failed: only 6 of 7 sections were found. 
 
 The unstyled-document fallback matched ALL-CAPS lines against a vocabulary list, and that list contained `"general condition"` but not `"provisions"`. The heading fell through, was parsed as a *clause*, and every clause beneath it was filed under Section 6.
 
-**The real problem was the approach, not the missing word.** A vocabulary list can only ever recognise headings someone remembered to add. So the primary signal became **structural** — `SECTION|PART|CHAPTER|SCHEDULE|ANNEXURE` followed by a number — which recognises the *shape* of a heading. The word list stayed as a secondary fallback.
+The missing word was a symptom of the approach. A vocabulary list can only ever recognise headings someone remembered to add. So the primary signal became structural (`SECTION|PART|CHAPTER|SCHEDULE|ANNEXURE` followed by a number), which recognises the *shape* of a heading. The word list stayed as a secondary fallback.
 
 Then the tests passed, and the fix was still broken.
 
@@ -288,7 +288,7 @@ regex compiled OK: ^(?:SECTION|PART|CHAPTER|SCHEDULE|ANNEXURE)\s+[\dIVXL]+
   SECTION 7 - GENERAL PROVISIONS   -> False
 ```
 
-The pattern printed perfectly and matched nothing. The tests only passed because I had *also* added `"provision"` to the word list, so the fallback caught it — **the new code was dead, and a passing suite was hiding that.**
+The pattern printed perfectly and matched nothing. The tests only passed because I had *also* added `"provision"` to the word list, so the fallback caught it. The new code was dead, and a passing suite was hiding that.
 
 A hex dump of the line found it:
 
@@ -298,7 +298,7 @@ A hex dump of the line found it:
                     ^^
 ```
 
-Byte `08` — a literal **backspace character**, where `\b` (regex word boundary) was intended.
+Byte `08`: a literal backspace character, where `\b` (regex word boundary) was intended.
 
 **Root cause.** I had written that line through a bash heredoc into a `python -c` script. One level of backslash escaping was consumed in transit, so Python received `\b` inside a *non-raw* string and parsed it as the backspace escape, embedding control character 0x08 into the pattern. The regex then required a literal backspace in its input, which no text contains.
 
@@ -306,11 +306,11 @@ The giveaway had been there all along and I skimmed past it: `SyntaxWarning: inv
 
 **Three lessons, all of which generalise:**
 
-1. **Don't push regexes through nested shell + Python string layers.** Every layer silently consumes escaping. Write the file directly.
-2. **A passing test suite is not proof your new code runs.** Here an old code path masked a completely inert new one. If you add a mechanism, check the *mechanism* works — not just that the outcome is right.
-3. **Read the warnings.** `invalid escape sequence` named the exact problem before I went looking for it.
+1. Don't push regexes through nested shell + Python string layers. Every layer silently consumes escaping. Write the file directly.
+2. A passing test suite is not proof your new code runs. Here an old code path masked a completely inert new one. If you add a mechanism, check that the *mechanism* works as well as the outcome.
+3. Read the warnings. `invalid escape sequence` named the exact problem before I went looking for it.
 
-`test_no_regex_contains_a_control_character` now scans every pattern in the module, because this failure class is genuinely invisible in a diff, in a terminal, and in a code review.
+`test_no_regex_contains_a_control_character` now scans every pattern in the module, because this failure class is invisible in a diff, in a terminal, and in a code review.
 
 ## Where M1 ended up
 
@@ -320,7 +320,7 @@ The giveaway had been there all along and I skimmed past it: `SyntaxWarning: inv
 | Sections found | 8 | 7 |
 | Offset mismatches | 0 | 0 |
 
-**26 tests passing** (21 need no model; 5 need Ollama).
+26 tests passing (21 need no model; 5 need Ollama).
 
 Files added: `app/pipeline/ingest.py`, `app/pipeline/segment.py`, `evals/golden/build_synthetic_policy.py`, `tests/conftest.py`, `tests/test_ingest.py`, `tests/test_segment.py`.
 
@@ -338,18 +338,18 @@ cd api
 
 Open `evals/golden/synthetic-hostile-policy.pdf` next to `synthetic-health-policy.pdf`. They contain identical text; only the typesetting differs. The segmenter now gets the same 39 clauses out of both.
 
-**Question to sit with before M2:** `test_finds_every_numbered_clause` checks that no clause was *missed*. `test_does_not_over_split` checks that clauses were not *shattered into fragments*. Both matter — but if you had to weaken one, which should it be?
+**Question to sit with before M2:** `test_finds_every_numbered_clause` checks that no clause was *missed*. `test_does_not_over_split` checks that clauses were not *shattered into fragments*. Both matter. If you had to weaken one, which should it be?
 
 <details>
 <summary>Answer</summary>
 
-Weaken **over-splitting** (precision). Prefer to keep recall.
+Weaken over-splitting (precision). Prefer to keep recall.
 
-An over-split clause is still analysed, still scored, and still shown to the user. It appears as two entries instead of one — untidy, mildly confusing, but everything is on screen.
+An over-split clause is still analysed, still scored, and still shown to the user. It appears as two entries instead of one: untidy and mildly confusing, but everything is on screen.
 
-A **missed** clause is invisible for the rest of the pipeline's life. It is never classified, never scored, never displayed, and never cited. Nothing downstream can recover it, and nothing signals its absence.
+A *missed* clause is invisible for the rest of the pipeline's life. It is never classified, never scored, never displayed, and never cited. Nothing downstream can recover it, and nothing signals its absence.
 
-Now consider *which* clause. If the one lost happens to be an exclusion or a notice condition, the app confidently shows a user a policy that looks safer than it is — the precise harm this project exists to prevent, delivered with a clean UI and full confidence.
+Now consider *which* clause. If the one lost happens to be an exclusion or a notice condition, the app confidently shows a user a policy that looks safer than it is. That is the precise harm this project exists to prevent, delivered with a clean UI and full confidence.
 
 That asymmetry is why `_numbering()` leans toward accepting a boundary, and why the hostile-document tests are all about recall.
 </details>
@@ -360,11 +360,11 @@ That asymmetry is why `_numbering()` leans toward accepting a boundary, and why 
 
 Two stages, and one habit.
 
-**Stage 3 (`api/app/pipeline/analyze.py`)** asks the model, for each clause: what type is it, what does it mean in plain English, and two judgments — how **likely** is it to affect a typical policyholder, and how **severe** is the consequence.
+Stage 3 (`api/app/pipeline/analyze.py`) asks the model, for each clause: what type is it, what does it mean in plain English, and two judgments (how *likely* is it to affect a typical policyholder, and how *severe* is the consequence).
 
-**Stage 4 (`api/app/pipeline/score.py`)** combines those two judgments with signals it computes itself into a single impact score, and ranks the clauses.
+Stage 4 (`api/app/pipeline/score.py`) combines those two judgments with signals it computes itself into a single impact score, and ranks the clauses.
 
-The habit is the important part: **from here on, decisions in this project are settled by measurement.** `evals/run_eval.py` exists so that a prompt edit, a model swap, or a batch-size change is judged by a number rather than by looking at a few outputs and forming an impression. Impressions are formed on exactly the sample where a plausible-sounding wrong answer is most convincing.
+From here on, decisions in this project are settled by measurement. `evals/run_eval.py` exists so that a prompt edit, a model swap, or a batch-size change is judged by a number rather than by looking at a few outputs and forming an impression. Impressions are formed on exactly the sample where a plausible-sounding wrong answer is most convincing.
 
 ## Concept 6: Splitting judgment from arithmetic
 
@@ -390,7 +390,7 @@ Two deliberate choices:
 
 **Buriedness multiplies, never adds.** A clearly written, prominently placed exclusion is still an exclusion. Being buried should make a *consequential* clause worse; it must not make a trivial clause important. Multiplication preserves that ordering, addition would not.
 
-**Dividing by `(1 + BURIEDNESS_BOOST)` rather than clamping at 100.** Clamping would collapse several genuinely different clauses onto exactly 100, destroying the ordering at the very top of the list — which is the only part anyone reads.
+**Dividing by `(1 + BURIEDNESS_BOOST)` rather than clamping at 100.** Clamping would collapse several different clauses onto exactly 100, destroying the ordering at the very top of the list, the only part anyone reads.
 
 ### Measuring "obscuring"
 
@@ -399,23 +399,23 @@ The problem statement says policies *obscure* the clauses that decide claims. `b
 | Signal | Weight | What it captures |
 |---|---|---|
 | Position in document | 0.20 | Readers give up; drafters put unwelcome parts after appealing ones |
-| Flesch–Kincaid grade | 0.35 | Long sentences built from Latinate words — "indemnify", "repudiate" |
+| Flesch-Kincaid grade | 0.35 | Long sentences built from Latinate words such as "indemnify" and "repudiate" |
 | Cross-references | 0.25 | Every "as defined in Annexure III" is a hop, and a chance to give up |
 | Defined-term dependence | 0.20 | A clause you cannot understand where it sits |
 
-Flesch–Kincaid is `0.39*(words/sentence) + 11.8*(syllables/word) - 15.59`. Legal drafting scores high on *both* terms at once, which is why difficulty carries the heaviest weight. Syllables are counted by a vowel-group heuristic — wrong on individual words, but averaged across a clause, and used only to rank clauses against each other, so a consistent small bias changes no ordering.
+Flesch-Kincaid is `0.39*(words/sentence) + 11.8*(syllables/word) - 15.59`. Legal drafting scores high on *both* terms at once, which is why difficulty carries the heaviest weight. Syllables are counted by a vowel-group heuristic. It is wrong on individual words, but it is averaged across a clause and used only to rank clauses against each other, so a consistent small bias changes no ordering.
 
-The defined-term signal is derived **per document**, from that policy's own definition clauses, not from a fixed word list. Which terms are load-bearing depends on what *this* policy chose to define.
+The defined-term signal is derived *per document*, from that policy's own definition clauses, not from a fixed word list. Which terms are load-bearing depends on what *this* policy chose to define.
 
 ## Failure 4: a silent empty array
 
 The first full eval run reported `39/40 clauses analysed` and logged `UNANALYSED CLAUSES: [0]`.
 
-Clause 0 is the document's front matter — title, UIN, disclaimer. Investigating, the individual retry did not throw an error. It **succeeded**, returning `{}`.
+Clause 0 is the document's front matter (title, UIN, disclaimer). Investigating, the individual retry did not throw an error. It *succeeded*, returning `{}`.
 
-The model had replied `{"clauses": []}` — an empty array. Faced with text that is not a clause, it declined to produce an entry.
+The model had replied `{"clauses": []}`, an empty array. Faced with text that is not a clause, it declined to produce an entry.
 
-**That response is completely valid under the schema.** The schema constrained the *shape of each element*; it said nothing about *how many elements* the array must contain. Constrained decoding had done exactly what was asked, and a clause vanished from the pipeline with no error anywhere.
+That response is completely valid under the schema. The schema constrained the *shape of each element*; it said nothing about *how many elements* the array must contain. Constrained decoding had done exactly what was asked, and a clause vanished from the pipeline with no error anywhere.
 
 The fix is to make cardinality part of the grammar too:
 
@@ -430,83 +430,83 @@ The fix is to make cardinality part of the grammar too:
 
 Verified enforced: given a prompt insisting there were no clauses at all, the model still emitted exactly three entries.
 
-Forcing an entry for genuinely non-clause text is the right trade. It lands as `procedural` with low ratings and scores near zero — harmless. A silently dropped clause is invisible for the rest of the pipeline's life, which is precisely the failure this project exists to prevent.
+Forcing an entry for non-clause text is the right trade. It lands as `procedural` with low ratings and scores near zero, which is harmless. A silently dropped clause is invisible for the rest of the pipeline's life, which is precisely the failure this project exists to prevent.
 
 > **The refinement of Concept 1:** constrained decoding guarantees exactly what you encode in the schema, and *nothing you forgot to encode*. "Every element is well-formed" and "the right number of elements exist" are separate guarantees, and you get only the ones you ask for.
 
 ## Failure 5: a performance optimisation that was never measured
 
-The module was written to send clauses in **batches of 5**, with a confident docstring explaining that batching amortises the long system prompt across several clauses and is therefore faster.
+The module was written to send clauses in batches of 5, with a confident docstring explaining that batching amortises the long system prompt across several clauses and is therefore faster.
 
 That reasoning sounded obvious. It was wrong.
 
 | Batch size | Macro-F1 | Wall time |
 |---|---|---|
 | 5 | 0.973 | 121.9s |
-| **1** | **1.000** | 128.5s |
+| 1 | 1.000 | 128.5s |
 
 Batching bought about 5% wall time and cost a clause.
 
 **Why the speed argument failed:** Ollama already caches the repeated system-prompt prefix between calls, so re-sending it is nearly free. The saving being optimised for did not exist.
 
-**Why the accuracy loss is the more interesting half:** the clause batching got wrong — 5.2 "Proportionate Deduction", a `sub_limit` read as a `condition` — classifies **correctly when sent on its own**. Nothing about the clause was hard. It was the company it kept. Sharing a generation lets the model's reading of one clause bleed into the next, and clauses in a policy sit next to each other precisely *because* they are related, which makes the interference worse rather than better.
+**Why the accuracy loss is the more interesting half:** the clause batching got wrong (5.2 "Proportionate Deduction", a `sub_limit` read as a `condition`) classifies correctly when sent on its own. Nothing about the clause was hard. It was the company it kept. Sharing a generation lets the model's reading of one clause bleed into the next, and clauses in a policy sit next to each other precisely *because* they are related, which makes the interference worse rather than better.
 
 The default is now 1. Batching is still supported, because the wall-time picture changes for a much larger document.
 
-> **A performance argument that has not been measured is a guess, however obvious it sounds.** This is the entire reason `evals/` exists.
+> A performance argument that has not been measured is a guess, however obvious it sounds. `evals/` exists to do that measuring.
 
 ## Failure 6: the test that caught unbounded arithmetic
 
-A unit test asserting scores stay within 0–100 failed with `impact_score=462.44` and `position_signal=99.0`.
+A unit test asserting scores stay within 0-100 failed with `impact_score=462.44` and `position_signal=99.0`.
 
-Position was computed as `seg.order_idx / len(segments)`. That silently assumed `order_idx` values always span `0..len-1`. Scoring any *subset* — as a unit test does, or as a re-scoring pass would — produced ratios above 1 and impact scores in the hundreds.
+Position was computed as `seg.order_idx / len(segments)`. That silently assumed `order_idx` values always span `0..len-1`. Scoring any *subset* (as a unit test does, or as a re-scoring pass would) produced ratios above 1 and impact scores in the hundreds.
 
-The fix computes position from the clause's **rank within the list actually passed in**, which is bounded by construction:
+The fix computes position from the clause's rank within the list it is given, which is bounded by construction:
 
 ```python
 for rank, seg in enumerate(segments):
     position = rank / max(total - 1, 1)
 ```
 
-Worth noticing: the full pipeline would never have exposed this, because there `order_idx` and list position always coincide. The bug was only reachable through a test that used the function differently than production does — which is a large part of what unit tests are *for*.
+Worth noticing: the full pipeline would never have exposed this, because there `order_idx` and list position always coincide. The bug was only reachable through a test that used the function differently than production does, and exercising code that way is a large part of what unit tests are *for*.
 
 ## Concept 7: Measuring the right thing
 
-The classification eval came out at **macro-F1 1.000** — every one of the 39 clauses correctly typed, across all seven types.
+The classification eval came out at macro-F1 1.000: every one of the 39 clauses correctly typed, across all seven types.
 
 Macro-F1 rather than accuracy, deliberately: the golden policy has 8 exclusions but only 4 waiting periods, and accuracy lets a model coast on the common types. Macro-F1 weights every type equally, because a missed waiting period misleads a policyholder just as badly as a missed exclusion.
 
-A perfect score is a good moment to be suspicious. So: **what does this number not cover?**
+A perfect score is a good moment to be suspicious. So: what does this number not cover?
 
 It measures *labelling*. The product is a *ranking*. Those are different, and only the first was being measured.
 
-Inspecting the actual top 10 confirmed the gap. The room-rent cap sat at rank 14 and the senior-citizen co-payment at rank 22 — the two most notorious causes of unexpected shortfalls in Indian health insurance, both below the fold. Meanwhile rank 3 was "Medical Examination": a clause letting the insurer require an examination **at its own expense**, which costs the policyholder nothing.
+Inspecting the actual top 10 confirmed the gap. The room-rent cap sat at rank 14 and the senior-citizen co-payment at rank 22. Those are the two most notorious causes of unexpected shortfalls in Indian health insurance, and both were below the fold. Meanwhile rank 3 was "Medical Examination": a clause letting the insurer require an examination *at its own expense*, which costs the policyholder nothing.
 
 Classification F1 reported all of this as flawless, because every one of those clauses was labelled correctly.
 
 ### Measuring it
 
-`evals/golden/ranking-expectations.json` names five clauses that must appear in the top 10 and four that must not, each with a written justification, authored from how claims actually go wrong — and written *before* looking at any ranking, so the metric tests the system rather than rationalising its output.
+`evals/golden/ranking-expectations.json` names five clauses that must appear in the top 10 and four that must not, each with a written justification, authored from how claims go wrong and written *before* looking at any ranking, so the metric tests the system rather than rationalising its output.
 
-Baseline: **5/9**.
+Baseline: 5/9.
 
 ### Two fixes, both principled
 
-**1. Severity anchors (prompt).** The model had rated "Medical Examination" severity **5** — the same as a claim being refused outright. The severity scale was being read as a measure of a clause's *tone* rather than its cost. Added explicit anchors: *a power the Company exercises at its own expense is severity 1, however formally written*; *a cap that cascades across the whole bill is 4–5, not 3*.
+**1. Severity anchors (prompt).** The model had rated "Medical Examination" severity 5, the same as a claim being refused outright. The severity scale was being read as a measure of a clause's *tone* rather than its cost. Added explicit anchors: *a power the Company exercises at its own expense is severity 1, however formally written*; *a cap that cascades across the whole bill is 4-5, not 3*.
 
-→ 5/9 to **6/9**. Classification held at 1.000.
+Result: 5/9 to 6/9. Classification held at 1.000.
 
 **2. Sub-limit weight (formula).** `TYPE_WEIGHT[sub_limit]` was 0.70 against `condition` at 0.95, so a sub-limit could never outrank a condition with equal ratings.
 
-The original weighting reflected the *worst case*. But conditions and exclusions are **contingent** — a notice deadline costs everything, but only if you miss it. A sub-limit is **certain**: a room-rent cap applies to every claim, automatically, forever. On expected loss rather than worst case, sub-limits were systematically understated. Raised to 0.85, staying below `condition` because total repudiation is still the worse tail, and tail risk is what people are least able to absorb.
+The original weighting reflected the *worst case*. But conditions and exclusions are *contingent*: a notice deadline costs everything, but only if you miss it. A sub-limit is *certain*: a room-rent cap applies to every claim, automatically, forever. On expected loss rather than worst case, sub-limits were systematically understated. Raised to 0.85, staying below `condition` because total repudiation is still the worse tail, and tail risk is what people are least able to absorb.
 
-→ still **6/9**, but a *different* 6/9. Room rent and proportionate deduction moved to ranks 7 and 5; the pre-existing disease waiting period slipped to 11.
+Result: still 6/9, but a *different* 6/9. Room rent and proportionate deduction moved to ranks 7 and 5; the pre-existing disease waiting period slipped to 11.
 
 ### Knowing when to stop
 
-That last result is the useful one. The score held while the composition shifted, meaning changes had started **trading one expectation against another**. That is the signature of overfitting to 9 hand-authored expectations on a single synthetic document.
+That last result is the useful one. The score held while the composition shifted, meaning changes had started trading one expectation against another. That is the signature of overfitting to 9 hand-authored expectations on a single synthetic document.
 
-So tuning stopped. The ranking is materially better than at baseline — both room-rent clauses now surface, which is what a real policyholder most needs — and the honest position is that further progress needs a **larger, more diverse eval set with real policies**, not more knob-turning against this one.
+So tuning stopped. The ranking is materially better than at baseline (both room-rent clauses now surface, which is what a real policyholder most needs), and further progress needs a larger, more diverse eval set with real policies, not more knob-turning against this one.
 
 > Ending at 6/9 with a documented reason is worth more than 9/9 reached by fitting the metric. The second number would not survive contact with a real policy, and there would be no way to know.
 
@@ -514,11 +514,11 @@ So tuning stopped. The ranking is materially better than at baseline — both ro
 
 | Metric | Result |
 |---|---|
-| Classification macro-F1 | **1.000** (39/39, all 7 types) |
-| Ranking expectations | **6/9** (from 5/9 baseline) |
+| Classification macro-F1 | 1.000 (39/39, all 7 types) |
+| Ranking expectations | 6/9 (from 5/9 baseline) |
 | Clauses analysed | 40/40 |
 | Analysis time | ~128s for 40 clauses, local 7B |
-| Tests | **38 passing** |
+| Tests | 38 passing |
 
 Files added: `app/pipeline/analyze.py`, `app/pipeline/score.py`, `evals/run_eval.py`, `evals/golden/ranking-expectations.json`, `tests/test_score.py`.
 
@@ -535,18 +535,18 @@ python evals/run_eval.py --batch-size 5 --no-report
 python evals/run_eval.py --batch-size 1 --no-report
 ```
 
-The second run of any eval takes almost no time — the content-addressed cache from M0 serves every response. Edit a prompt and bump `PROMPT_VERSION`, and it recomputes; forget to bump it, and you would silently measure the old prompt. That is why the version is part of the cache key.
+The second run of any eval takes almost no time, because the content-addressed cache from M0 serves every response. Edit a prompt and bump `PROMPT_VERSION`, and it recomputes; forget to bump it, and you would silently measure the old prompt. That is why the version is part of the cache key.
 
 **Question to sit with before M3:** the classification eval scores 1.000 on a 39-clause policy that this repository generated. Name two distinct reasons that number will not hold on a real insurer's policy wording.
 
 <details>
 <summary>Answer</summary>
 
-**1. The clauses were authored to be classifiable.** Each one was written as a clean example of a single type, with the boundaries the taxonomy assumes. Real policy clauses are frequently hybrids — a coverage grant with an embedded cap, a proviso, and a cross-reference to an annexure, all in one sentence. The tie-breaker list decides those cases, but "which label is *most* right" is a genuinely harder judgment than the golden set ever asks for.
+**1. The clauses were authored to be classifiable.** Each one was written as a clean example of a single type, with the boundaries the taxonomy assumes. Real policy clauses are frequently hybrids: a coverage grant with an embedded cap, a proviso, and a cross-reference to an annexure, all in one sentence. The tie-breaker list decides those cases, but "which label is *most* right" is a harder judgment than the golden set ever asks for.
 
-**2. The labels and the document share an author.** Both come from the same `CLAUSES` list, so the label reflects the intent the text was written to express. On a real policy, someone must read ambiguous legal language and decide what it *means* — and two insurance lawyers would not always agree. A benchmark where the ground truth was inferred, rather than declared, is inherently noisier.
+**2. The labels and the document share an author.** Both come from the same `CLAUSES` list, so the label reflects the intent the text was written to express. On a real policy, someone must read ambiguous legal language and decide what it *means*, and two insurance lawyers would not always agree. A benchmark where the ground truth was inferred, rather than declared, is inherently noisier.
 
-A third, worth knowing: **39 clauses is a small sample.** A single misclassification moves macro-F1 by roughly 0.03, so the difference between 1.000 and 0.97 is one clause and well inside run-to-run noise.
+A third: 39 clauses is a small sample. A single misclassification moves macro-F1 by roughly 0.03, so the difference between 1.000 and 0.97 is one clause and well inside run-to-run noise.
 
 This is why M2 ends with "the ranking needs a real eval set" rather than with a victory lap.
 </details>
@@ -2065,7 +2065,7 @@ day-care-not-listed
 ```
 
 So the system's real score is *27 guaranteed passes plus up to five coin
-flips*: somewhere in 0.675–0.800, and which end gets reported is luck.
+flips*: somewhere in 0.675-0.800, and which end gets reported is luck.
 
 Read those three column headings as "in these three runs", not as facts about
 the cases. Three runs cannot show that a case is *always* right, and run 1 was
@@ -4341,7 +4341,7 @@ rather than a solved one, and it qualifies the headline number below.
 | Verdict accuracy | 0.925 (37/40) | 1.000 | 0.975 | 0.925 | **0.975** (39/40) |
 | Citation recall | 0.774 average, of 31 | 0.844 | 0.813 | 0.844 | of 32 |
 | False citations | 0.200 average | 0 of 5 | 1 of 5 | 1 of 5 | |
-| Failed quotations | 0–1 | 0 | 0 | 0 | |
+| Failed quotations | 0-1 | 0 | 0 | 0 | |
 | Detection integrity | 1.000 | 1.000 | 1.000 | 1.000 | |
 
 37 of 40 cases gave the same verdict in all three samples. Sample 1 replays the
@@ -4460,7 +4460,7 @@ this milestone used this output.
 
 ## Concept 36: a score on the cases you tuned against
 
-Every decision in M10–M13 — keep this change, revert that one — was made by
+Every decision in M10-M13 — keep this change, revert that one — was made by
 looking at how the same 40 cases moved. Each decision was reasonable. But a
 system chosen by hundreds of small decisions against one set of questions will
 fit that set, the same way a model trained and tested on the same data scores
@@ -4715,7 +4715,7 @@ Batch 2's second chunk ran one version before the last, which has no case the
 final rule can reach.
 
 **The honest headline** is therefore not 0.950. On questions this system was not
-tuned on it answers about **83–85%** correctly, and every quotation it shows is
+tuned on it answers about **83-85%** correctly, and every quotation it shows is
 verified. That is the number to quote.
 
 **Still open:**
@@ -4741,7 +4741,7 @@ Failure 15 (M6): two reports describing different runs, with nothing in either
 saying so. **A report is a record of a run; a record that is wrong about the
 run is worse than none, because it is believed.**
 
-Before merging M8–M14, the documents were read against the code, and the report
+Before merging M8-M14, the documents were read against the code, and the report
 was wrong about itself in two ways.
 
 **1. The commit stamp could not say the code was uncommitted.** The stamp was
@@ -4774,7 +4774,7 @@ the prompt version is a label only; `cache.make_key()` in `api/app/llm/cache.py`
 hashes `model`, `messages`, `schema` and `options`. The sentence was generated
 by code, so it was reprinted, wrong, into every report after M10. A reader
 trusting it would expect a version bump to regenerate every answer — the exact
-opposite of what the cache does and the property the M10–M14 experiments relied
+opposite of what the cache does and the property the M10-M14 experiments relied
 on.
 
 The same pass found the README still reporting M8's 0.675 and 129 tests, and
@@ -4851,7 +4851,7 @@ what-if questions ("I had knee surgery 8 months in") with cited clauses.
 At the end of M14, every number in this project described **one document**: a
 synthetic 39-clause policy, 5 pages, about 12,000 characters or 3,400 tokens,
 written for this repository by the same author as the code. On it, scenario
-verdicts scored 0.950 on the tuned cases and 0.81–0.85 on held-out ones.
+verdicts scored 0.950 on the tuned cases and 0.81-0.85 on held-out ones.
 
 The design rests on a premise about size. There is deliberately no retrieval
 (Concept 15): instead of searching for relevant clauses, the scenario step is
@@ -5088,7 +5088,7 @@ deal since the reservation was set in M5.
 Two things hid this. The 3.5 estimate over-counts clause text, which errs
 safe and quietly absorbed part of the shortfall. And the synthetic clauses
 used only 3,346 of the 5,692-token budget, leaving slack. Real policies fill the
-budget, and the answer's room falls to 848–1,087 tokens.
+budget, and the answer's room falls to 848-1,087 tokens.
 
 Nothing was truncated — every prompt is below 8,192 — and M5 estimated the
 largest legitimate answer at about 500 tokens, so these answers still fit. What
@@ -5163,9 +5163,9 @@ complained until 24 tests failed with `'ShortlistClause' object has no attribute
 
 ## Two smaller measurements
 
-- **Analysis speed.** 6.0–6.3 seconds per clause on real wordings (112 clauses
+- **Analysis speed.** 6.0-6.3 seconds per clause on real wordings (112 clauses
   in 689 s). Older notes in this log and in `app/llm/cache.py` say a 200-clause
-  policy takes 2–5 minutes; with one clause per call and one request at a time
+  policy takes 2-5 minutes; with one clause per call and one request at a time
   (M9), it is about 20 minutes. HDFC's 76 segments would take about 8 minutes in
   the app.
 - **A truncated analysis.** One real clause's analysis ran past the 1,600-token
@@ -5193,7 +5193,7 @@ segmentation measured above, and a key naming `13#2` would name an artefact.
 nothing in another document.
 
 **Majority of three samples: 9 of 10 verdicts correct**, nine unanimous.
-Detection integrity 1.000 in every sample: 11–14 quotations per sample failed
+Detection integrity 1.000 in every sample: 11-14 quotations per sample failed
 verification, and every one was flagged as unverified rather than shown as
 evidence. The guarantee held on real input.
 
@@ -5295,8 +5295,8 @@ cases replay byte-identically after this milestone's changes. They say nothing
 about real ones.
 
 On real wordings, what is measured is structural: reading order broken on a
-two-column document, page furniture as clauses, a scenario step that sees 6–27
-clauses and no coverage clause, and an answer margin of 848–1,087 tokens against
+two-column document, page furniture as clauses, a scenario step that sees 6-27
+clauses and no coverage clause, and an answer margin of 848-1,087 tokens against
 1,600. The ten-question probe scored 9 of 10 verdicts and mostly for the wrong
 reasons. **No accuracy figure for real policies should be quoted from this
 milestone** — only that the system is not yet sound on them, and why.
@@ -5510,7 +5510,7 @@ would have passed without testing anything.
 ## Step 3: what is a clause number
 
 With order and furniture fixed, listing Star's segments one per line showed
-exclusions 1–9 and conditions 2–9 were still missing — buried inside
+exclusions 1-9 and conditions 2-9 were still missing — buried inside
 3,000-character pieces cut by the size cap.
 
 ### Numbers on a line of their own
@@ -5558,7 +5558,7 @@ Same position, same form, both "a number, then a capital". Indentation cannot
 separate them (both at x=330), and neither can sequence (3 follows 2 in both
 the list and the exclusions). Listing every numbered line on Star found one
 signal that did: **every real clause number was bold, and every list item was
-plain** — exclusions 1–23, conditions 1–28, coverage 1–9 bold; `i.`–`xvi.`,
+plain** — exclusions 1-23, conditions 1-28, coverage 1-9 bold; `i.`–`xvi.`,
 `A.`–`L.`, `01.`–`20.`, and `2255.` plain.
 
 ## Concept 39: evidence relative to the document
@@ -5668,7 +5668,7 @@ a digit is missed.
 | Median length (chars) | 286 → 286 | 178 → 408 | 503 → 312 | 2,930 → 861 |
 | Page headers as clauses | 0 → 0 | 26 → 0 | | |
 
-On Star: coverage 1–9, exclusions 1–23 and conditions 1–28 are one clause each
+On Star: coverage 1-9, exclusions 1-23 and conditions 1-28 are one clause each
 under their own numbers; `2255` is gone; exclusion 2 holds its whole
 24-month and 36-month lists. Star's count of repeated numbers went *up*, and
 correctly: coverage, exclusions and conditions each restart at 1, and
@@ -5753,7 +5753,7 @@ Ollama.
 ### Failure 55: the second detector, disproven in both directions
 
 The count alone cannot tell "short" from "cut in half". The first replacement
-used characters per token: policy prompts measured 4.06–4.3, a prompt cut to half
+used characters per token: policy prompts measured 4.06-4.3, a prompt cut to half
 reports about twice that, so anything over 6.0 was called truncated. Its own
 live test then failed — a repeated English sentence measured 5.47 characters
 per token, uncomfortably close to 6.0 — and measuring more kinds of text
@@ -6093,7 +6093,7 @@ PowerShell script sampled the runner's private memory and the system's
 committed memory every 30 seconds for the whole run, reading only operating
 system counters so that it could not disturb the model.
 
-**What happened.** Through the synthetic suite (prompts of 2,000–5,500 tokens)
+**What happened.** Through the synthetic suite (prompts of 2,000-5,500 tokens)
 the runner stayed between 6.2 and 6.5 GB, and it stayed there while the Star
 policy's 78 clauses were analysed one at a time. When the Star questions began,
 nine minutes into that step, it started to grow by about 650 MB every 30
@@ -6427,7 +6427,7 @@ bar it reads (Step 7).
 for one phrasing and not the other.
 
 **The fix.** Measured first: every real waiting period on all four policies
-(Star's three exclusions, HDFC's and Niva's, the synthetic 3.1–3.4) names the
+(Star's three exclusions, HDFC's and Niva's, the synthetic 3.1-3.4) names the
 policy's start in one of four ways. Clause 4 names none of them and names a
 hospital stay instead.
 
@@ -6610,7 +6610,7 @@ not flagged as a contradiction.
 ### Failure 64: the annexure lists, run together
 
 **Setup.** IRDAI's standard annexure lists items a policy does not pay for:
-List I, items never covered; Lists II–IV, items folded into room, procedure
+List I, items never covered; Lists II-IV, items folded into room, procedure
 and treatment charges. Star's copy is headed `LIST I - Items for which coverage
 is not available in the policy`, in bold, smaller than body text.
 
@@ -6618,7 +6618,7 @@ is not available in the policy`, in bold, smaller than body text.
 the ombudsman addresses after them ran on as one clause under the previous
 section, "TABLE OF BENEFITS", and the size cap cut them every 3,000 characters.
 The piece `c74` began mid-list ("AMBULANCE EQUIPMENT 51 ABDOMINAL BINDER …"),
-held the end of List I and the start of Lists II–IV, and was read as a
+held the end of List I and the start of Lists II-IV, and was read as a
 `sub_limit`. Because the reductions module looks up the treatment's words in
 every sub-limit, the caesarean question was told:
 
@@ -8278,7 +8278,7 @@ A clause card for Star's annexure of non-payable items carried the note:
 
 > written at grade 94 reading level
 
-**Flesch–Kincaid, from scratch.** It estimates the US school grade needed to read
+**Flesch-Kincaid, from scratch.** It estimates the US school grade needed to read
 a text on one pass, from two measurements: how long the sentences are, and how
 many syllables the words have. Long sentences are hard to hold in your head at
 once; long words tend to be the Latinate ones. Grade 8 is ordinary newspaper
@@ -11683,8 +11683,8 @@ had dropped: "...then waiting period for the same would be reduced to the
 extent of prior coverage."
 
 **Measured: verdicts unchanged, 2 of 7.** Citations improved (citing the
-deciding clause went from 0–20% of answers to 40%), and quotes failing the
-verbatim check fell from 6–7 a run to 1–2. But nothing that was refused
+deciding clause went from 0-20% of answers to 40%), and quotes failing the
+verbatim check fell from 6-7 a run to 1-2. But nothing that was refused
 became paid.
 
 ## Failure 89: five more lines said "blocks"
@@ -12133,7 +12133,7 @@ on both codes, majority of three (the M27 answers replayed from the cache):
 | Set (changed questions only) | M27 | ordering |
 |---|---|---|
 | Synthetic main (12) | 10 | 10 |
-| Synthetic held-out 1–3 (7) | 4 | 4 |
+| Synthetic held-out 1-3 (7) | 4 | 4 |
 | Synthetic held-out 4 (4) | 3 | **1** |
 | Star (2) | 1 | 1 |
 | HDFC (7) | 5 | **4** |
@@ -17204,7 +17204,7 @@ including the tests that call the model, was run on the result.
 ## 1. A word broken at a line end was two words to the reading grade
 
 **The problem.** Part of each clause's risk score is how hard it is to
-read, measured as a Flesch–Kincaid grade (introduced in an earlier entry):
+read, measured as a Flesch-Kincaid grade (introduced in an earlier entry):
 
 `0.39 × (words per sentence) + 11.8 × (syllables per word) − 15.59`
 
@@ -17376,8 +17376,8 @@ which is why the failure was frequent rather than rare.
 
 It was shown without the model by replacing the model call with a 1.0 s
 sleep and the version request with a 0.43 s sleep, then setting the
-remembered version's age before the test body: ages 0–58.5 s and 60.5 s up
-passed; 59–59.8 s all failed with `cold=1.02s warm=0.44s`.
+remembered version's age before the test body: ages 0-58.5 s and 60.5 s up
+passed; 59-59.8 s all failed with `cold=1.02s warm=0.44s`.
 
 **The fix** is in the test, not the app. It clears the remembered version
 itself, so the request always lands in the cold call:
@@ -17676,7 +17676,7 @@ needs the Ollama server running, though not the model loaded. The script
 stopped on any cache miss rather than call the model. Results:
 
 - Clause 1.5's text is identical on both.
-- The code's window check (built in M29–M31) gives the same result on both:
+- The code's window check (built in M29-M31) gives the same result on both:
   window 60 days, expense 75 days before admission, **OUTSIDE**.
 - The model ignores that on both. Main's stored answer is `not_covered`
   citing 1.4, the AYUSH treatment clause. The branch's is `not_covered`
@@ -17899,7 +17899,7 @@ listed = (bool(_LISTED.search(f"{heading} {text[:_OPENING_CHARS]}"))
 
 `_GENERAL_SECTION` is `wait|exclu`. A period in any other section is treated
 as *listed*: it bars only the conditions its own clause names. Niva's
-pre-existing-disease, specified-disease and 30-day waits (5.1.1–5.1.3) had
+pre-existing-disease, specified-disease and 30-day waits (5.1.1-5.1.3) had
 the section "Optional Beneﬁt:". So the 30-day wait, which bars every
 illness in the first month, would have been read as barring only what it
 lists, and an illness on day 10 would not have been refused by it. Niva has
@@ -17932,7 +17932,7 @@ refund proportionate premium", HDFC's "d. Secure Benefit", roman numerals
 ("i. Standard Definitions"), Niva's "a. Renewal Premium:". Each guard in
 the final version answers one of them:
 
-- **letters a–h only**, so "i." and "v." (roman numerals) are items;
+- **letters a-h only**, so "i." and "v." (roman numerals) are items;
 - **the words, less filler, must be exactly one name for a part of a
   policy**: "Other Terms and Conditions" reduces to "conditions" and passes;
   "Secure Benefit" reduces to "secure benefit" and does not;
@@ -18091,7 +18091,7 @@ program and Elevate HER add-on tables, the claims procedure.
 ## Not done
 
 - **Tables** are still read one cell per line.
-- **Exclusion ids.** ICICI's exclusions are numbered 1–25, each printing its
+- **Exclusion ids.** ICICI's exclusions are numbered 1-25, each printing its
   IRDAI code ("Code- Excl01"). HDFC's lettered items take the code as their
   id; extending that to numbered items would change Star's and Niva's ids.
 - **Reading order** (Failure 113): a decision, not a fix.
@@ -18268,7 +18268,7 @@ from all of it. Now `narrow` picks from all of it directly, and the final
 also fits. Same input to every step, so the same prompt.
 </details>
 
-# M47–M49 measured: three branches on the real model, and the clause that taught the model to refuse
+# M47-M49 measured: three branches on the real model, and the clause that taught the model to refuse
 
 Written 2026-10-24, on branch `m49-pick-first`. No code changed in this
 entry. It records the first model runs of three branches written while the
@@ -18576,7 +18576,7 @@ heading. The result was a clause with the citation id `1#3` (the third clause
 numbered "1" in the policy), saying: no payment for any claim caused by any of
 the following, and all the waiting periods apply. With nothing following it.
 
-Failure 116 (in the entry "M47–M49 measured") showed what that does. When the
+Failure 116 (in the entry "M47-M49 measured") showed what that does. When the
 model was shown `1#3`, it refused typhoid 45 days into the policy under the
 36-month pre-existing-disease wait (Excl01), though nothing said the typhoid
 was pre-existing. Removing `1#3` from the prompt repaired the answer 5 of 5
