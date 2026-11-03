@@ -139,7 +139,7 @@ Making the eval measure a change despite a model that never answers twice the sa
 - Failure 29: a correct fix that measured net negative. The fact extractor leaked a verdict through a free-text `notes` field. Removing the field fixed one case, broke three, and cost citations. Reverted; recorded as open.
 - Failure 30: a warning that blamed a cause that did not exist. Reverting a change replays older answers, which the comparison had mistaken for an unrecorded run.
 
-### M11: Reading the inputs: two bugs upstream of every verdict
+### M11: Reading the inputs (two bugs upstream of every verdict)
 Two errors that happened before the model ever reasoned, found by reading the failing cases' own explanations rather than their scores. Verdict accuracy 0.725 to 0.800; failed quotations 5 to 1.
 
 - Checking what a fix would buy, before building it. The planned fix (code-added citations) could reach one case of 31 and would have broken another. Set aside.
@@ -344,7 +344,7 @@ Typhoid on day 20 was paid and physiotherapy at seven months half-paid, although
 Star refused a dengue claim on day 20 as a pre-existing disease nobody described, and never cited the 30-day clause that decides it. The mirror of M31's rule asks again when a refusal ignores an unserved general waiting period. Dengue and HDFC gastroenteritis now cite the deciding clause 3 of 3; main set 37/40.
 - Failure 94: "unanimous, 3 of 3" was not a stable answer. One Star question was right in every sample on one day and wrong in 11 of 12 three days later, with the request, settings and driver all unchanged. What three samples from one run can and cannot show.
 
-### M33: Three more candidates for the consistency check: two built, one refused
+### M33: Three more candidates for the consistency check (two built, one refused)
 A caesarean answered by reading the maternity exclusion backwards; a group cover's share ignored; thyroid delayed by a list that does not name it. Each investigated from stored answers first, which showed that two "groups" of failures were several unrelated ones. Star 9/10, held-out 3 1/3.
 - Failure 95: zero false alarms on stored answers, six of six on fresh ones. A rule that passed every model-free check refused a correct HDFC answer in a new server session. A rule's reach is its precondition, not what the last run answered; the three-step procedure that follows.
 - Why one rule was refused. The same word lookup is safe when a match triggers a re-ask toward refusing, and unsafe when a non-match would push toward paying: it misses 26 of 52 conditions the lists really bar.
@@ -361,7 +361,7 @@ A chest infection two weeks into the policy was paid because the check stood dow
 - Investigated and left alone. Five open cases, each with the candidate rule and the number that ruled it out.
 - Follow-up: the full run, 38/40. Compared case by case with the run before it; one case that was called noise turns out to be wrong in every full run and right on its own.
 
-### M36: The last two misses in the main set: one fixed, one deliberately left
+### M36: The last two misses in the main set (one fixed, one deliberately left)
 An injury "while being arrested for shoplifting" was paid, but only when the server had just answered other questions; and a 72-year-old's pneumonia was answered "cannot tell". The first gets a word lookup and a two-way question; the second gets a fix that worked on the eval and was refused.
 - Why a question can be right alone and wrong in a full run. Reproduced: right 4 of 4 after at most one other question, wrong 6 of 7 after two or more.
 - Failure 100: a two-way question is still not neutral. With the refusing option listed first, an unrelated arrest turned an appendix claim into a refusal, 3 of 3. The order of the options is part of the question.
@@ -450,7 +450,7 @@ Group headings like HDFC's "1. Waiting Periods" (with its "shall not make paymen
 - Failure 117: the sentence moved into the first item, and refused five covered claims. Merged into Excl01, the blanket sentence reached nearly every prompt; HDFC fell to 9/14.
 - Why the skip comes after the citation ids are counted.
 
-### M51: Asking the model again about the pre-existing-disease wait: two attempts, both reverted
+### M51: Asking the model again about the pre-existing-disease wait (two attempts, both reverted)
 No code from this entry is in the repository. A check that re-asked a refusal resting only on the pre-existing wait, and then a rule reading "for years" / "since childhood" as pre-existing so the check would only reach real unknowns. Read it for how to find which cases a new check reaches before using the model, and for a rule that passed every eval question and failed on the first one written against it.
 - Failure 118: the check reached two right answers, and broke both. "diabetes for years" paid 5 of 5; asthma refused without its reason.
 - Failure 119: a question nobody had written. An old illness mentioned, a broken arm claimed: refused 3 of 3 under the diabetes rule. The facts hold one condition per question, so the rule cannot be narrowed without a schema change.
