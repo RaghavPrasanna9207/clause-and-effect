@@ -14324,7 +14324,7 @@ asking chosen questions fresh and then this one:
 The immediately preceding question alone does not do it; two or more do.
 The wrong answer reads:
 
-> covered — cites 3.1, 4.1, 5.3 as "reduces" — "... The claim is not subject
+> covered, cites 3.1, 4.1, 5.3 as "reduces": "... The claim is not subject
 > to any waiting periods as they do not apply to claims arising out of an
 > Accident. Additionally, the treatment does not fall under any exclusions
 > such as cosmetic surgery, intentional self-injury, or participation ..."
@@ -14425,8 +14425,8 @@ The wording above differs in two ways: the paying outcome is listed first,
 and the message says outright that the lookup cannot tell whether the
 arrest is relevant. With it the same sentence stays `covered`, 3 of 3.
 
-**For this model the order of the options in a question is part of the
-question.** Whatever is listed last, next to the instruction to answer,
+For this model the order of the options in a question is part of the
+question. Whatever is listed last, next to the instruction to answer,
 gets the benefit of the doubt. A check that asks again has to be tested on
 right answers as carefully as on wrong ones, and "it is phrased neutrally"
 is a claim to measure, not to assume.
@@ -14491,7 +14491,7 @@ On the eval it is clean:
 
 - 1 of 109 first requests changes (this case).
 - 1 of 109 questions meets the rule's precondition (this case).
-- This case: not_covered → asked → `conditional` citing 5.3, 3 of 3.
+- This case: not_covered, asked again, then `conditional` citing 5.3, 3 of 3.
 
 By the procedure this project has used since M33 (list every case the rule
 can reach, sample each live) that is a pass, with nothing left to sample.
@@ -14713,8 +14713,8 @@ something:
   heart attack and admitted, and the hospital claim has been accepted. I have
   held the policy eight years." Expected `covered`, citing 2.5.
 
-**Every rule in this system does one thing: under some condition, it asks
-the model its question a second time.** The code never sets a verdict. So a
+Every rule in this system does one thing: under some condition, it asks
+the model its question a second time. The code never sets a verdict. So a
 rule is only as good as the model's behaviour when asked again, and what
 this milestone measured, four times, is how often a 7B model asked "are you
 sure?" gives up an answer that was right.
@@ -14835,7 +14835,7 @@ the keep-the-answer option first.
 
 Session 1, on a scratch copy:
 
-- `breach-of-law`, stored answer (4.3) → asked → cites 4.4: 3 of 3.
+- `breach-of-law`, stored answer (4.3), asked again, then cites 4.4: 3 of 3.
 - Five guard questions where the refusal is right for another reason
   (a nose job, bungee jumping, IVF, a tooth extraction, each beside an old
   arrest or a night of drinking): each kept its own clause, 2 of 2.
@@ -15480,9 +15480,9 @@ an eval question with a known answer:
 
 | question | expected | shown |
 |---|---|---|
-| "I was injured while being arrested for shoplifting and needed hospital treatment. I have held the policy six years." | not_covered | Not covered — "On the wording below, this policy would not pay." |
-| "I was hit by a car ten days after my policy started and was hospitalised." | covered | Likely covered — "Nothing in this policy appears to block it, on what you described." |
-| "Does this policy cover my car being stolen from the hospital car park?" | insufficient_information | Your policy doesn't settle this — "Rather than guess, here is what would be needed to answer." |
+| "I was injured while being arrested for shoplifting and needed hospital treatment. I have held the policy six years." | not_covered | Not covered: "On the wording below, this policy would not pay." |
+| "I was hit by a car ten days after my policy started and was hospitalised." | covered | Likely covered: "Nothing in this policy appears to block it, on what you described." |
+| "Does this policy cover my car being stolen from the hospital car park?" | insufficient_information | Your policy doesn't settle this: "Rather than guess, here is what would be needed to answer." |
 
 Each answer came back in 10 to 20 seconds with its reasoning, the list of
 facts the person did not mention, and the deciding clauses quoted in the
@@ -15974,7 +15974,7 @@ not.)
 **The caesarean after a scooter is where the false line does harm.** The
 first answer, in both printed samples:
 
-> verdict: covered, citing 18 —
+> verdict: covered, citing 18:
 > "Clause 18 (18) [exclusion] excludes medical treatment expenses traceable
 > to childbirth, but this exclusion does not apply because the claim is due
 > to an accident."
