@@ -13142,7 +13142,7 @@ answer is `not_covered`, citing 3#2.
 The verdict had been right since M16. Since M27 the citation was not. The
 stored answer:
 
-> verdict: not_covered — cites `1#2` (effect "delays")
+> verdict: not_covered, cites `1#2` (effect "delays")
 > "The claim for dengue fever is not covered because it falls under the
 > pre-existing disease exclusion. Clause 1#2 ... expenses related to the
 > treatment of a Pre-Existing Disease (PED) ... are excluded until the
@@ -13339,7 +13339,7 @@ under the pre-existing bar, and its expected verdict is
 in the cache (the stored first answer is right), so a few fresh ones were
 generated. One in full:
 
-> verdict: covered — cites 18 (permits)
+> verdict: covered, cites 18 (permits)
 > "You are covered for the caesarean delivery. Clause 18 (18) explicitly
 > excludes 'Medical treatment expenses traceable to childbirth (including
 > complicated deliveries and caesarean sections incurred during
@@ -13592,7 +13592,7 @@ Clause 4.2 of the synthetic policy:
 
 The stored answer:
 
-> verdict: covered — cites 2.1 (permits)
+> verdict: covered, cites 2.1 (permits)
 > "... The incident of falling down the stairs after drinking heavily does
 > not fall under the exclusions for intentional self-injury or hazardous
 > activities. ..."
@@ -14133,7 +14133,7 @@ job, not the model's. It changes one question's request out of 109.
 
 Result, 3 of 3:
 
-> not_covered, citing 3.2 — "the 36-month pre-existing disease waiting
+> not_covered, citing 3.2: "the 36-month pre-existing disease waiting
 > period (clause 3.2) has not yet been served. The policy has been held for
 > only 2 years"
 
