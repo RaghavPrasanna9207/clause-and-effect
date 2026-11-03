@@ -4518,7 +4518,7 @@ four accidents:
 
 A check of the fact extractor alone (`evals/check_fact_extraction.py`) was given
 new sentences about whether a condition was pre-existing, worded unlike any
-eval question. On the current prompt all five came back "unknown" — including
+eval question. On the current prompt all five came back "unknown", including
 *"I was diagnosed with asthma long before I bought this policy"*.
 
 The cause was one sentence in the fact prompt, written earlier to stop the
@@ -4533,7 +4533,7 @@ It stopped guessing, and it stopped reading. Replaced with a direct question
 and two examples (worded unlike any eval sentence), the extractor went from five
 failures on those sentences to two.
 
-The main set then lost six cases, each three samples of three — in places
+The main set then lost six cases, each three samples of three, in places
 with nothing to do with pre-existing conditions (an ICU rate, a breach of law,
 pre-hospitalisation expenses). The fact prompt feeds every reasoning prompt;
 changing what it says about one fact changed many answers. Reverted, and
@@ -4554,7 +4554,7 @@ as "delays", so a check for "permits" never fired. It now fires on any label
 but "denies".
 
 **2. What happens after the retry.** When the retry still leans on nothing but
-that clause — plus definitions, which explain a word and pay nothing — the
+that clause (plus definitions, which explain a word and pay nothing), the
 answer has nothing checkable behind it. That is the same position as an answer
 with no citations, and it goes the same way:
 
@@ -4584,15 +4584,15 @@ A refusal that names no clause refusing it has abandoned the question rather tha
 answered it. For answers that leaned on a missing list before the retry, a
 refusal that cites no exclusion, waiting period or condition as denying is also
 downgraded. It is scoped that narrowly on purpose: elsewhere, *correct* refusals
-carry sloppy labels too — a refusal on a cover window cites the window clause as
-"permits" — and a general rule would catch them.
+carry sloppy labels too (a refusal on a cover window cites the window clause as
+"permits"), and a general rule would catch them.
 
 Result: `day-care-not-listed` three samples of three in the final run, including
 both fresh ones; the held-out short procedure two of three.
 
 ## Failure 43: a retry that talked right answers out of themselves
 
-Two caps the person never raised — no room, no age — were being cited as
+Two caps the person never raised (no room, no age) were being cited as
 reducing claims: a late-paperwork claim cited the room cap and the co-payment
 beside the documents clause that decided it, and the held-out war injury cited
 both. The arithmetic already says NOT_RAISED for exactly these.
@@ -4603,14 +4603,14 @@ exactly as predicted from the stored answers. Measured:
 
 - the late-paperwork citations were cleaned up;
 - a held-out case whose right answer was `conditional` became "not enough
-  information" — its only citation had been the unraised co-payment, and
+  information": its only citation had been the unraised co-payment, and
   without it the model lost its way;
 - two main cases dropped to two samples of three.
 
 Telling a model its reason is unsupported cannot tell it whether the verdict was
 right for some *other* reason, and code cannot know that either. So the retry
 became a filter: the unsupported citation is removed silently, never
-retried, and only when another citation still stands — so it can never leave a
+retried, and only when another citation still stands, so it can never leave a
 verdict with nothing behind it and trigger a downgrade.
 
 ```python
@@ -4626,8 +4626,8 @@ case was right again.
 
 ## Failure 44: a fallback that destroyed a corrected answer
 
-In the final main run `room-rent-within-cap` — a room at 8,000 within a 10,000
-cap — answered "insufficient information" in both fresh samples. Printing four
+In the final main run `room-rent-within-cap` (a room at 8,000 within a 10,000
+cap) answered "insufficient information" in both fresh samples. Printing four
 fresh first answers and retries side by side:
 
 ```
@@ -4637,7 +4637,7 @@ retry  covered      [5.1 reduces]
         Therefore, the claim is paid in full."
 ```
 
-Four of four. The retry *fixed the verdict*, with exactly the right reason — and
+Four of four. The retry *fixed the verdict*, with exactly the right reason, and
 kept the label "reduces" on the room cap. The code then saw a cleared clause
 cited as reducing, dropped it (Concept 33), found no citations left, and
 downgraded the corrected answer.
@@ -4662,7 +4662,7 @@ pass through the same fallback.
 
 ## One more contradiction, and what finding it cost
 
-A held-out batch 2 case — intensive care at 9,000 a day against a 6,000 cap —
+A held-out batch 2 case (intensive care at 9,000 a day against a 6,000 cap)
 answered `covered` while citing the ICU cap as *reducing* the claim, three
 samples of three. The arithmetic had already computed that the cap applies. The
 citation and the calculation agree the claim is cut; only the verdict disagrees.
@@ -4677,12 +4677,12 @@ evidence of generalisation, and the report says so.
 ## Failure 45: blaming the last change for a drop that was sampling
 
 Batch 2 scored 12 of 13 when first run and 10 of 13 on the version after three
-more changes. The obvious story: those changes hurt generalisation — and one of
+more changes. The obvious story: those changes hurt generalisation, and one of
 them had just replaced a retry with a filter, which would fit.
 
 Before believing it, the two cases that moved were probed directly:
 
-- one's fresh first answers cited nothing any of the three changes acts on — no
+- one's fresh first answers cited nothing any of the three changes acts on: no
   code path had changed for it at all;
 - the other went through a rule present, unchanged, in both versions.
 
@@ -4701,7 +4701,7 @@ Majority of three samples per case:
 |---|---|---|
 | Main 40 (tuned on) | 0.975 (39/40) | 0.950 (38/40) |
 | Held-out batch 1 (16, read while fixing) | 0.750 before any M14 change | 0.813 (13/16) |
-| Held-out batch 2 (13, written before running) | — | 0.846 (11/13) |
+| Held-out batch 2 (13, written before running) | n/a | 0.846 (11/13) |
 
 Detection integrity was 1.000 in every sample of every set. Clause
 classification (macro-F1 1.000) and ranking (8 of 9) did not move.
@@ -4727,7 +4727,7 @@ verified. That is the number to quote.
 - held-out misses `gallbladder-no-timing` and `emergency-notice-on-time`;
 - citations the model gets wrong after every approach: five on the main set,
   several on the held-out batches (4.1, 4.8, 4.6, 5.3, 6.1);
-- the reasoning prompt still contains an eval question as its example — now
+- the reasoning prompt still contains an eval question as its example, now
   measured around rather than removed;
 - the batches were written by the same author as the fixes.
 
@@ -4751,7 +4751,7 @@ the bare hash of HEAD:
 ["git", "rev-parse", "--short", "HEAD"]
 ```
 
-The M14 report said `2da3dd6` — the M13 commit — while every number in it
+The M14 report said `2da3dd6` (the M13 commit) while every number in it
 measured M14 changes that existed only in the working tree. Anyone checking out
 `2da3dd6` to reproduce it would have got different code. The stamp now appends
 `-dirty` when `git status --porcelain` reports any change, with one exclusion:
@@ -4762,7 +4762,7 @@ measured M14 changes that existed only in the working tree. Anyone checking out
 ```
 
 REPORT.md is excluded because this script rewrites it. Without the exclusion,
-running the eval twice on a clean commit would call the second run dirty — a
+running the eval twice on a clean commit would call the second run dirty, and a
 warning that fires on every run is a warning nobody reads (the same lesson as
 the quotation check that "cried wolf" in M5).
 
@@ -4772,7 +4772,7 @@ prompt version, messages, schema and decoding settings". Since Concept 30 (M10)
 the prompt version is a label only; `cache.make_key()` in `api/app/llm/cache.py`
 hashes `model`, `messages`, `schema` and `options`. The sentence was generated
 by code, so it was reprinted, wrong, into every report after M10. A reader
-trusting it would expect a version bump to regenerate every answer — the exact
+trusting it would expect a version bump to regenerate every answer, the exact
 opposite of what the cache does and the property the M10-M14 experiments relied
 on.
 
@@ -4787,14 +4787,14 @@ tree, and the stamp was printed: `7379563`, as expected. Then REPORT.md alone
 was modified: `7379563` again, as expected.
 
 Both results were worthless. Stashing the edit also removed the new
-`_git_commit()` — those two runs executed the old function, which prints a
+`_git_commit()`, so those two runs executed the old function, which prints a
 bare hash no matter what. They would have "passed" with the exclusion broken or
 missing. Only the `-dirty` result from the edited tree had tested the new code.
 
 The check was redone by copying the new `run_all.py` outside the repository,
 importing it from there, and pointing it at the repository:
 
-| Tree state | Stamp from the NEW code |
+| Tree state | Stamp from the new code |
 |---|---|
 | clean | `7379563` |
 | only REPORT.md modified | `7379563` |
@@ -4802,7 +4802,7 @@ importing it from there, and pointing it at the repository:
 
 > **The lesson:** "the expected output appeared" is only evidence if the code
 > under test is the code that ran. Setting up the conditions for a test can
-> quietly change what is being tested — here, getting a clean tree removed the
+> change what is being tested without anyone noticing: here, getting a clean tree removed the
 > change being verified. It is the circular test of Failure 1 in a smaller form.
 
 ## Check it yourself
@@ -4814,7 +4814,7 @@ python evals/run_scenario_eval.py --heldout 2 --repeats 3 --only ho2-icu-over-ca
 ```
 
 **Question to sit with:** you change the fact prompt, and the main set loses six
-cases three times out of three — but the fact extractor's own check improves from
+cases three times out of three, but the fact extractor's own check improves from
 five failures to two. Before opening the answer: which result decides whether
 the change stays, and what would you need to see to change that decision?
 
@@ -4824,12 +4824,12 @@ the change stays, and what would you need to see to change that decision?
 **The end-to-end result decides, and the change goes.** The extractor check
 measures one stage; the product is the verdict a person reads. A stage getting
 more accurate while the verdicts get worse means the stage's output is used in
-ways the stage check cannot see — here, a fact that appears in every reasoning
+ways the stage check cannot see: here, a fact that appears in every reasoning
 prompt shifted answers to questions that had nothing to do with it.
 
-What could change the decision is not a better extractor score. It would be
-end-to-end evidence that the six breaks are recovered without losing the gain —
-for example, the same fact given to the reasoning step in a way that does not
+A better extractor score could not change the decision. What could is
+end-to-end evidence that the six breaks are recovered without losing the gain,
+for example the same fact given to the reasoning step in a way that does not
 alter every prompt (only when a pre-existing wait is actually at issue), measured
 on the main set *and* on a held-out batch, three samples each.
 
@@ -4934,7 +4934,7 @@ reads 100 in boiling water and using it to diagnose a fever.
 | HDFC ERGO, Optima Secure | 53 | 150,538 | 43,000 |
 
 Six to twelve times the synthetic document. Every page of all three had
-extractable text — none was a scanned image.
+extractable text; none was a scanned image.
 
 ## What the segmenter did to them
 
@@ -4968,8 +4968,8 @@ and list items. Both guesses were partly true and neither was the answer.
 The most striking case is a phone number. The policy prints a toll-free number
 `1800 425 2255.` that wraps, so a line begins `2255. Senior Citizens may call
 at 044-40020888`. The segmenter's numbering rule accepts a dotted number
-followed by a capital letter as a strong clause boundary — the test designed to
-tell "4.2 Room Rent" from "1.5 lakhs" — and this line passes it. After
+followed by a capital letter as a strong clause boundary (the test designed to
+tell "4.2 Room Rent" from "1.5 lakhs"), and this line passes it. After
 analysis and scoring, clause "2255" ranked first by risk on the whole
 policy, at 82.2.
 
@@ -5001,8 +5001,8 @@ read cleanly, column by column. The sort was written as a precaution against
 tables and sidebars that no test document contained, and on the first real
 two-column document it destroyed the reading order.
 
-**The offset invariant still held, and that is the lesson.** Every clause is an
-exact slice of `raw_text` — but `raw_text` itself was assembled in the wrong
+**The offset invariant still held.** Every clause is an
+exact slice of `raw_text`, but `raw_text` itself was assembled in the wrong
 order. An invariant proves consistency with its source. It cannot prove the
 source is right. A perfect slice of scrambled text is still scrambled.
 
@@ -5011,7 +5011,7 @@ source is right. A perfect slice of scrambled text is still scrambled.
 Star's specified-disease waiting period is a heading, `24 Months waiting
 period`, followed by a numbered list of twenty conditions. Each list item became
 its own clause: `12. Hernia of all types` is a 24-character segment, and
-`24 Months waiting period` is a separate one — placed after the list, because
+`24 Months waiting period` is a separate one, placed after the list, because
 of the sort above. A question about hernia surgery can find the word "hernia"
 and no waiting period attached to it.
 
@@ -5045,7 +5045,7 @@ be denied and never the clause saying the treatment is covered.
 
 Concept 15 rejected retrieval because "any k below all of them can drop the
 single clause that decides the case". On real documents the system does exactly
-that — silently. The only trace is a log line at `INFO` level:
+that, silently. The only trace is a log line at `INFO` level:
 
 ```python
 if len(kept) < len(clauses):
@@ -5073,23 +5073,23 @@ case, so the count is trustworthy.
 | HDFC ERGO | 7,344 | 848 |
 
 The reservation of 2,500 tokens has to hold everything that is not clause text
-— the system prompt, the facts, the per-clause headers and computed lines — and
+(the system prompt, the facts, the per-clause headers and computed lines) and
 the answer, whose ceiling is `num_predict = 1,600`.
 
 The synthetic policy's prompt is 22,711 characters and measured 5,270 tokens:
 4.3 characters per token, averaged over the whole prompt, not the 3.5 the
 budget assumes. At that rate its clause text (11,711 characters) is about 2,700
-tokens, so everything else in the prompt is about 2,550 tokens — already more
+tokens, so everything else in the prompt is about 2,550 tokens, already more
 than the whole 2,500 reservation, before any room for the answer. The system
 prompt alone is 8,054 characters, about 1,900 tokens, and has grown a great
 deal since the reservation was set in M5.
 
 Two things hid this. The 3.5 estimate over-counts clause text, which errs
-safe and quietly absorbed part of the shortfall. And the synthetic clauses
+safe and silently absorbed part of the shortfall. And the synthetic clauses
 used only 3,346 of the 5,692-token budget, leaving slack. Real policies fill the
 budget, and the answer's room falls to 848-1,087 tokens.
 
-Nothing was truncated — every prompt is below 8,192 — and M5 estimated the
+Nothing was truncated (every prompt is below 8,192), and M5 estimated the
 largest legitimate answer at about 500 tokens, so these answers still fit. What
 is gone is the margin the ceiling exists to provide. This is Failure 12's
 lesson again: the reservation and the things it must hold are numbers that
@@ -5109,7 +5109,7 @@ elif prompt_tokens + options["num_predict"] > options["num_ctx"]:
 
 The first version had one branch, and its message said the prompt "may have been
 truncated". On its first real run it fired for a 7,326-token prompt in an
-8,192-token window — which cannot have been truncated. It had merged two
+8,192-token window, which cannot have been truncated. It had merged two
 different conditions into the more alarming one. A warning is a claim; it should
 say what was measured and nothing more, the same point Failure 38 made about
 computed lines.
@@ -5122,7 +5122,7 @@ first conclusion was that a citation of clause 10 had become ambiguous in the
 product.
 
 That was wrong, and reading the product's code showed it. The scenario endpoint
-(`api/app/routers/scenarios.py`) already made repeated numbers unique — `10`,
+(`api/app/routers/scenarios.py`) already made repeated numbers unique: `10`,
 `10#2`, `10#3`. It was the eval's copy of that logic
 (`build_clauses()` in `evals/run_scenario_eval.py`) that did not:
 
@@ -5156,7 +5156,7 @@ and both the endpoint and the eval call it.
 **A smaller failure while making that change.** The new function was inserted
 after what looked like the last field of the `ShortlistClause` dataclass, having
 read the file only that far. One more field followed. It ended up after the
-function's `return`, where it is still valid Python — unreachable — so nothing
+function's `return`, where it is still valid Python (unreachable), so nothing
 complained until 24 tests failed with `'ShortlistClause' object has no attribute
 'section_path'`. Read to the end of the structure you are editing.
 
@@ -5168,8 +5168,8 @@ complained until 24 tests failed with `'ShortlistClause' object has no attribute
   (M9), it is about 20 minutes. HDFC's 76 segments would take about 8 minutes in
   the app.
 - A truncated analysis. One real clause's analysis ran past the 1,600-token
-  ceiling mid-JSON. The M5 retry — double the ceiling rather than repeat an
-  identical request — recovered it, as designed.
+  ceiling mid-JSON. The M5 retry (double the ceiling rather than repeat an
+  identical request) recovered it, as designed.
 
 ## Ten questions about a real policy, and a score that could not see its reasons
 
@@ -5199,7 +5199,7 @@ evidence. The guarantee held on real input.
 ### Failure 51: nine right answers, mostly for wrong reasons
 
 A verdict score is not an explanation, so the first sample's stored answers were
-replayed — zero model calls — and read case by case:
+replayed (zero model calls) and read case by case:
 
 | Case | Verdict | What the answer rested on |
 |---|---|---|
@@ -5207,14 +5207,14 @@ replayed — zero model calls — and read case by case:
 | dengue in the first month | ✓ not_covered | the 36-month pre-existing wait again. The deciding clause is the 30-day initial wait. |
 | treatment in Dubai | ✓ not_covered | "pneumonia is a pre-existing condition". The overseas exclusion was not in the shortlist. |
 | teeth whitening | ✓ not_covered | a fragment of a waiting-period definition, not the cosmetic exclusion |
-| trekking, cataract, hernia after the wait | ✓ conditional | the 5% co-payment — true, but the adventure-sports exclusion and the cataract limit were never seen |
+| trekking, cataract, hernia after the wait | ✓ conditional | the 5% co-payment: true, but the adventure-sports exclusion and the cataract limit were never seen |
 | room over the cap | ✓ conditional | the co-payment and a room cap of 6,000; the policy caps it at 5,000 (Failure 52) |
 | caesarean | ✗ conditional | the maternity exclusion was dropped by the shortlist, and its words "caesarean sections" had been spliced into a different clause (Failure 48) |
 | gallstones, no timing | ✓ insufficient_information (2 of 3) | the replayed sample said conditional, on the co-payment |
 
 Four refusals landed on the right verdict through the wrong clause. Four
-payable claims landed on `conditional` through the one clause — the universal
-co-payment — that happens to make every payable claim on this policy
+payable claims landed on `conditional` through the one clause (the universal
+co-payment) that happens to make every payable claim on this policy
 conditional. On this document, a system that answered "conditional, because of
 the co-payment" to everything payable and "not covered, because of the
 pre-existing wait" to every refusal would score about the same.
@@ -5224,14 +5224,14 @@ wrong) at the level of the whole answer. A verdict-only score measures whether
 the last word is right. It cannot see whether the reason is, and on a document
 whose structure collapses the verdicts into two likely answers, the last word
 carries very little information. 9 of 10 here is not evidence that the system
-works on real policies. It is a demonstration of why `must_cite` exists — and
+works on real policies. It is a demonstration of why `must_cite` exists, and
 it cannot be added until the segmentation gives clauses stable, meaningful ids.
 
 The replay also showed where the failed quotations come from. The model quotes
 the policy's real sentences, in their real order; the stored clause text is in
 the interleaved order, so the sentence is not a contiguous substring of it. One
-quotation was of a computed line — "room rent of 8,000 rupees per day EXCEED
-that" — which is the pipeline's words, not the policy's (the same leak as
+quotation was of a computed line ("room rent of 8,000 rupees per day EXCEED
+that"), which is the pipeline's words, not the policy's (the same leak as
 Failure 32). And one citation passed verification while being irrelevant: the
 "clause 2255" segment happens to contain the fraud condition, whose text was
 quoted, correctly, as the reason a hernia was refused. A verified quote proves
@@ -5253,10 +5253,10 @@ if charged > limit:
 
 The synthetic policy caps room rent at a plain percentage, so a percentage is
 all the analysis schema extracts (`cap_percent_of_sum_insured`). Star's wording
-is "up to 2% of the Sum Insured subject to maximum of Rs.5000/-, per day" — the
+is "up to 2% of the Sum Insured subject to maximum of Rs.5000/-, per day": the
 lower of two limits, and the code models one. For a 3-lakh policy it stated a
 6,000-rupee cap as calculated fact. Here the verdict survived, because 8,000
-exceeds both. A 5,500-rupee room would have been declared within the cap — by
+exceeds both. A 5,500-rupee room would have been declared within the cap by
 the part of the system that exists precisely so the model is never trusted with
 arithmetic.
 
@@ -5271,7 +5271,7 @@ Ordered by what everything downstream depends on:
 1. Reading order (`ingest.py`, the block sort). Every later stage reads the
    spliced text.
 2. Page furniture and number-like prose. Running headers and footers, a
-   phone number, table amounts — must not become clause boundaries.
+   phone number and table amounts must not become clause boundaries.
 3. List items belong to their heading.
 4. The shortlist must not remove coverage wholesale, and the reservation
    must be derived from the measured system prompt and `num_predict` rather than
@@ -5280,7 +5280,7 @@ Ordered by what everything downstream depends on:
    in the analysis schema and the room-cap arithmetic.
 
 Only after those: an answer key with `must_cite` for real policies, and the
-hosted-model comparison — which would otherwise be comparing models on
+hosted-model comparison, which would otherwise be comparing models on
 scrambled input.
 
 Deliberately not done here: any of those fixes. Each is a design decision with
@@ -5298,7 +5298,7 @@ two-column document, page furniture as clauses, a scenario step that sees 6-27
 clauses and no coverage clause, and an answer margin of 848-1,087 tokens against
 1,600. The ten-question probe scored 9 of 10 verdicts and mostly for the wrong
 reasons. No accuracy figure for real policies should be quoted from this
-milestone — only that the system is not yet sound on them, and why.
+milestone, only that the system is not yet sound on them, and why.
 
 ## Check it yourself
 
@@ -5311,8 +5311,8 @@ python evals/run_scenario_eval.py --policy samples/real/star-arogya-sanjeevani.p
     --cases evals/real/scenarios-star-arogya-sanjeevani.json --repeats 3 --no-report
 ```
 
-**Question to sit with:** the offset invariant — every clause is an exact slice
-of the extracted text — held on all three real policies, while one of them had
+**Question to sit with:** the offset invariant (every clause is an exact slice
+of the extracted text) held on all three real policies, while one of them had
 its two columns interleaved line by line. Before opening the answer: what would
 a check need to compare against to catch that, and why can no check that only
 looks at `raw_text` ever do it?
@@ -5325,7 +5325,7 @@ each clause with `raw_text`, and `raw_text` was built by the same code that
 scrambled it, so the two agree perfectly while both are wrong. Any check whose
 only reference is the pipeline's own output inherits the pipeline's mistakes.
 
-A check that could catch it compares against something produced differently —
+A check that could catch it compares against something produced differently:
 PyMuPDF's native block order, a text layer extracted by another library, or a
 handful of sentences a person copied from the PDF by hand and asserted to appear
 contiguously in `raw_text`. The last is the cheapest and the strongest: a
@@ -5360,7 +5360,7 @@ measured, without fixing anything, what went wrong:
    `12. Hernia of all types` was a clause of its own, with no waiting period.
 4. The scenario step saw a fraction of the policy. The context window was
    8,192 tokens, real wordings are several times that, and the shortlist that
-   decides what fits ranked by impact — which dropped every coverage clause on
+   decides what fits ranked by impact, which dropped every coverage clause on
    all three policies.
 5. A room-rent cap with a rupee maximum ("2% of the Sum Insured subject to
    maximum of Rs.5000/- per day") was computed from the percentage alone
@@ -5399,7 +5399,7 @@ block 11 (y=96) straight after block 3 (y=96).
 
 A crude check for disorder was then run over all three: count the places where
 reading order jumps back *up* the page within one column. It found 99 on HDFC
-ERGO's wording, 29 on Niva Bupa's, 24 on Star's — which looked like evidence
+ERGO's wording, 29 on Niva Bupa's, 24 on Star's, which looked like evidence
 that native order was *also* broken. Printing every one of them showed none
 were: they were table cells read row by row (`'75 Lakhs' -> '100 & 200'`, the
 second cell's text sitting two points higher), and list numbers vertically
@@ -5432,8 +5432,8 @@ so what could catch that? Answer: only a reference the pipeline did not
 produce. A check against `raw_text` inherits every mistake in `raw_text`.
 
 Real PDFs cannot be committed, so the test builds its own two-column page with
-paragraphs of staggered height — the arrangement that interleaved on the real
-document — and compares with the order the paragraphs were *written*:
+paragraphs of staggered height (the arrangement that interleaved on the real
+document) and compares with the order the paragraphs were *written*:
 
 ```python
 # api/tests/test_ingest.py
@@ -5445,7 +5445,7 @@ assert positions == sorted(positions), f"reading order scrambled: {raw!r}"
 ```
 
 It was run against the old code first and failed exactly as the real document
-did — `RIGHT-ONE` between the two left paragraphs. A test never seen failing
+did: `RIGHT-ONE` between the two left paragraphs. A test never seen failing
 has not been shown to test anything.
 
 The synthetic policies extract byte-identically before and after, so none of
@@ -5463,7 +5463,7 @@ same text, with digits masked so `7 / 25` matches `8 / 25`:
 | Star Health | 4 lines on 100% of 26 pages | list markers (`#.`, `i.`) on ≤ 50%, all over the page |
 | Niva Bupa | 1 line on 100% of 24 | `#.#.#.` on 33% |
 | HDFC ERGO | 6 lines on 100% of 53 | `c.`, `i.` on 43% |
-| Synthetic ×2 | nothing | — |
+| Synthetic ×2 | nothing | n/a |
 
 Two groups with a gap between them: furniture is on every page at the same
 height, content repeats on at most half the pages and anywhere on them.
@@ -5493,7 +5493,7 @@ Three tests: headers and page numbers removed while a sentence broken across a
 page reads unbroken; a body line repeated on every page but *not in a margin*
 kept; and a two-page document keeping its header, because two pages are too few
 to tell a running header from a title. The last one passes on the old code too,
-by design — it guards the new rule against over-reaching, not the old bug.
+by design: it guards the new rule against over-reaching, not the old bug.
 
 ### A character nobody could see
 
