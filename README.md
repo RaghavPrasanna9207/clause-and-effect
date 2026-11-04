@@ -4,6 +4,10 @@ Upload an Indian health insurance policy PDF. Find out what could get your claim
 
 > Status: working end to end. Upload a policy PDF in the browser, get a ranked list of the clauses that could cost you money (each in plain English beside the policy's own wording), and ask what-if questions answered with cited clauses. Runs entirely on a local model; your policy never leaves your machine.
 
+![Uploading a policy PDF, filtering the ranked clauses to exclusions, and asking whether a diabetes admission 8 months in is covered](docs/demo.gif)
+
+The recording uses the synthetic policy from `evals/golden/`, with the model's answers already cached, so the analysis appears in seconds. A first read of a 40-clause policy takes a few minutes on this laptop.
+
 ## Results
 
 Measured with `qwen2.5:7b-instruct-q4_K_M` on Ollama 0.35.1, on the code as shipped (M50, 2026-10-27), on four documents' worth of questions: a 39-clause synthetic IRDAI-style policy written for this repository, Star Health's copy of Arogya Sanjeevani, the standard product every Indian health insurer must sell with the same wording, and HDFC ERGO's my: Optima Secure, a long retail product (both fetched by script, never committed). An Ollama update alone once moved 10 of 69 verdicts, so the Ollama version is part of every cached answer's key (M17 in the learning log).
